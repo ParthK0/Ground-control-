@@ -1,0 +1,11 @@
+# GroundControl Local-Only Workspace Gitignore
+# Keep code, configurations, and assets only in the local workspace
+
+frontend/*
+!frontend/README.md
+
+# Ignore package dependencies and production builds
+frontend/node_modules/
+frontend/dist/
+.env
+.env.local

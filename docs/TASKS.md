@@ -5,7 +5,7 @@ first — they're additive on top of the "done" definition in SPEC.md, not core 
 
 - [ ] **M0 — Docs + mockups**: SPEC/STACK/ARCHITECTURE locked, Stitch mockups for `/fan`
       and `/ops`
-- [ ] **M1 — Skeleton + deploy**: repo scaffold, Firestore schema seeded with Northgate
+- [/] **M1 — Skeleton + deploy**: repo scaffold, Firestore schema seeded with Northgate
       Stadium zones, empty frontend + backend deployed to a live URL (deploy early, per
       the standard). Responsive breakpoints (desktop + mobile) for both `/fan` and
       `/ops` built into the scaffold from the start, not retrofitted at M7

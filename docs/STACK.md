@@ -15,6 +15,7 @@
 - `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (service account,
   server-side Firestore access)
 - `STAFF_AUTH_SECRET` (shared staff-login token for v1's single-role auth)
+- `FRONTEND_ORIGIN` (the single allowed browser origin for backend CORS; never `*`)
 
 The frontend only ever holds the public Firebase web config (safe to expose) and points
 at the backend's own URL — it never holds a Gemini key or a service-account credential.

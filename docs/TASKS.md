@@ -3,13 +3,13 @@
 Assumption: solo build, ~10–14 day window. If the real deadline is tighter, cut M5/M6
 first — they're additive on top of the "done" definition in SPEC.md, not core to it.
 
-- [ ] **M0 — Docs + mockups**: SPEC/STACK/ARCHITECTURE locked, Stitch mockups for `/fan`
+- [x] **M0 — Docs + mockups**: SPEC/STACK/ARCHITECTURE locked, Stitch mockups for `/fan`
       and `/ops`
-- [/] **M1 — Skeleton + deploy**: repo scaffold, Firestore schema seeded with Northgate
+- [x] **M1 — Skeleton + deploy**: repo scaffold, Firestore schema seeded with Northgate
       Stadium zones, empty frontend + backend deployed to a live URL (deploy early, per
       the standard). Responsive breakpoints (desktop + mobile) for both `/fan` and
       `/ops` built into the scaffold from the start, not retrofitted at M7
-- [ ] **M2 — Fan assistant v1**: `/chat` endpoint + chat UI, answers wayfinding +
+- [/] **M2 — Fan assistant v1**: `/chat` endpoint + chat UI, answers wayfinding +
       accessibility questions from static zone data, 3 languages
 - [ ] **M3 — Ops dashboard v1**: density map (Recharts + venue layout), manual density
       entry form, live Firestore listener

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     firebase_private_key: str
     staff_auth_secret: str
     frontend_origin: str
+    demo_mode: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

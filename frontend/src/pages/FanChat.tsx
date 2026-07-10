@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Send, MapPin, Navigation, Globe, HelpCircle } from 'lucide-react';
+import { BACKEND_URL } from '../config';
 
 type Language = 'en' | 'es' | 'fr';
 
@@ -58,10 +59,109 @@ const transportOptions = [
   { mode: 'Walking / Biking', time: '25–40 min', co2: '0.0 kg', isGreen: true }
 ];
 
+// Client-side fallback responses and topic classifier for offline safety
+const localFallbackResponses = {
+  en: {
+    wayfinding: "To navigate Northgate Stadium, refer to the venue map. Gates A & B link to the North & South Concourses (z1 & z2), Gate C links to the East Gate Plaza (z3), and Gate D links to the West Gate Plaza (z4). The Metro Transit Bridge is z5 and Retail Row is z6.",
+    accessibility: "Northgate Stadium is committed to accessibility. Gates A, B, and D provide fully accessible step-free routes. Note that Gate C (East Gate Plaza / z3) and Retail Row (z6) are steps-only and do not have ramp access.",
+    transport: "For eco-friendly transit, we recommend the Metro/transit option (35 min, 1.2 kg CO₂). Walking or biking takes 25–40 min with ~0 kg CO₂. Rideshare options emit 4.5 kg CO₂ (shared) to 8.0 kg CO₂ (private) per round trip.",
+    general: "Welcome to GroundControl! I can help you with wayfinding, accessibility info, or transport comparisons for Northgate Stadium. Please ask your question."
+  },
+  es: {
+    wayfinding: "Para navegar por el Estadio Northgate, consulte el mapa. Las Puertas A y B conectan con las Explanadas Norte y Sur (z1 y z2), la Puerta C conecta con la Plaza de la Puerta Este (z3) y la Puerta D con la Plaza de la Puerta Oeste (z4). El Puente del Metro es z5 y la Fila de Tiendas es z6.",
+    accessibility: "El Estadio Northgate cuenta con rutas accesibles. Las Puertas A, B y D ofrecen accesos sin escalones. Tenga en cuenta que la Puerta C (Plaza de la Puerta Este / z3) y la Fila de Tiendas (z6) solo tienen escalones y no disponen de rampa.",
+    transport: "Para un viaje ecológico, recomendamos el Metro/transporte público (35 min, 1.2 kg de CO₂). Caminar o ir en bicicleta toma 25-40 min con ~0 kg de CO₂. Las opciones de viaje compartido emiten de 4.5 kg a 8.0 kg de CO₂ por viaje de ida y vuelta.",
+    general: "¡Bienvenido a GroundControl! Puedo ayudarle con la navegación, accesibilidad o comparación de transporte para el Estadio Northgate. Por favor, haga su consulta."
+  },
+  fr: {
+    wayfinding: "Pour vous déplacer dans le Stade Northgate, consultez le plan. Les Portes A et B relient les halls Nord et Sud (z1 et z2), la Porte C relie l'Esplanade de la Porte Est (z3) et la Porte D relie l'Esplanade de la Porte Ouest (z4). Le pont de transit du métro est z5 et la rangée des magasins est z6.",
+    accessibility: "Le Stade Northgate est accessible. Les Portes A, B et D proposent des itinéraires sans marches. Attention: la Porte C (Esplanade Est / z3) et la rangée des magasins (z6) ne disposent pas de rampe d'accès.",
+    transport: "Pour un trajet écologique, nous recommandons le Métro/transport (35 min, 1.2 kg CO₂). La marche ou le vélo prend 25–40 min avec ~0 kg CO₂. Les trajets partagés ou privés en voiture émettent de 4.5 kg à 8.0 kg CO₂.",
+    general: "Bienvenue sur GroundControl ! Je peux vous aider pour le guidage, l'accessibilité ou la comparaison des transports au Stade Northgate. Posez-moi votre question."
+  }
+};
+
+const classifyLocalTopic = (message: string): 'wayfinding' | 'accessibility' | 'transport' | 'general' => {
+  const msg = message.toLowerCase();
+  
+  const accKeywords = [
+    "access", "wheelchair", "step-free", "ramp", "disability", "disabl", "handicap", "elevator", "lift", 
+    "accessible", "wheel", "chair", "stepless", "stairs", "silla de ruedas", "rampa", "ascensor", 
+    "elevador", "escalones", "fauteuil roulant", "rampe", "ascenseur", "escalier", "step"
+  ];
+  if (accKeywords.some(k => msg.includes(k))) return "accessibility";
+  
+  const transKeywords = [
+    "metro", "bus", "train", "transit", "ride", "taxi", "uber", "lyft", "drive", "car", "co2", "emission", 
+    "green", "transport", "bike", "walk", "emissions", "eco", "autobús", "tránsito", "viaje", "coche", 
+    "bici", "caminar", "métro", "voiture", "émissions", "vélo", "marcher", "eco-transport"
+  ];
+  if (transKeywords.some(k => msg.includes(k))) return "transport";
+  
+  const wayKeywords = [
+    "gate", "zone", "concourse", "plaza", "bridge", "find", "where", "how to get", "route", "direction", 
+    "map", "seating", "seat", "block", "located", "locate", "puerta", "mapa", "dirección", "dónde", 
+    "asiento", "porte", "carte", "où", "siège"
+  ];
+  if (wayKeywords.some(k => msg.includes(k))) return "wayfinding";
+  
+  return "general";
+};
+
 export const FanChat: React.FC = () => {
   const [lang, setLang] = useState<Language>('en');
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant', text: string, topic?: string }>>([
+    { sender: 'assistant', text: translations['en'].welcome }
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
   const t = translations[lang];
+
+  useEffect(() => {
+    if (messages.length === 1 && messages[0].sender === 'assistant') {
+      setMessages([{ sender: 'assistant', text: t.welcome }]);
+    }
+  }, [lang]);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() || isLoading) return;
+
+    const userMessage = inputText.trim();
+    setInputText('');
+    setMessages(prev => [...prev, { sender: 'user', text: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          language: lang,
+          selectedZoneId: selectedZone || undefined
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setMessages(prev => [...prev, { sender: 'assistant', text: data.answer, topic: data.topic }]);
+    } catch (err) {
+      console.error("Chat request failed:", err);
+      const matchedTopic = classifyLocalTopic(userMessage);
+      const fallbackText = localFallbackResponses[lang][matchedTopic];
+      setMessages(prev => [...prev, { sender: 'assistant', text: fallbackText, topic: matchedTopic }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div style={{
@@ -72,7 +172,6 @@ export const FanChat: React.FC = () => {
       backgroundColor: 'var(--color-base-bg)',
       fontFamily: 'var(--font-primary)'
     }}>
-      {/* Subheader Language Control */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -110,7 +209,6 @@ export const FanChat: React.FC = () => {
         </span>
       </div>
 
-      {/* Main Split Grid (Responsive Layout) */}
       <div className="fan-grid" style={{
         display: 'grid',
         gridTemplateColumns: '1.2fr 1.5fr',
@@ -119,8 +217,6 @@ export const FanChat: React.FC = () => {
         flex: 1,
         overflow: 'hidden'
       }}>
-        
-        {/* Left Side: Map & Transport info */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -128,7 +224,6 @@ export const FanChat: React.FC = () => {
           overflowY: 'auto'
         }} className="fan-side-panel">
           
-          {/* Static SVG Venue Map */}
           <div style={{
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
@@ -148,7 +243,6 @@ export const FanChat: React.FC = () => {
               {t.mapTitle}
             </h2>
             
-            {/* SVG Visual Representation */}
             <div style={{
               backgroundColor: 'var(--color-surface-elevated)',
               borderRadius: '8px',
@@ -159,11 +253,9 @@ export const FanChat: React.FC = () => {
               alignItems: 'center'
             }}>
               <svg viewBox="0 0 400 300" style={{ width: '100%', maxHeight: '220px' }} aria-label="Northgate Stadium Venue Zones Map">
-                {/* Stadium Center Pitch Representation */}
                 <rect x="140" y="100" width="120" height="100" rx="8" fill="rgba(0, 230, 118, 0.05)" stroke="rgba(0, 230, 118, 0.2)" strokeWidth="2" strokeDasharray="3" />
                 <circle cx="200" cy="150" r="24" fill="none" stroke="rgba(0, 230, 118, 0.15)" strokeWidth="2" />
                 
-                {/* Zone 1: North Concourse */}
                 <path 
                   d="M 100 60 L 300 60 L 270 90 L 130 90 Z" 
                   fill={selectedZone === 'z1' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
@@ -176,7 +268,6 @@ export const FanChat: React.FC = () => {
                   North Concourse (z1)
                 </text>
 
-                {/* Zone 2: South Concourse */}
                 <path 
                   d="M 100 240 L 300 240 L 270 210 L 130 210 Z" 
                   fill={selectedZone === 'z2' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
@@ -189,7 +280,6 @@ export const FanChat: React.FC = () => {
                   South Concourse (z2)
                 </text>
 
-                {/* Zone 3: East Gate Plaza */}
                 <path 
                   d="M 280 100 L 340 70 L 340 230 L 280 200 Z" 
                   fill={selectedZone === 'z3' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
@@ -202,7 +292,6 @@ export const FanChat: React.FC = () => {
                   East Gate (z3)
                 </text>
 
-                {/* Zone 4: West Gate Plaza */}
                 <path 
                   d="M 120 100 L 60 70 L 60 230 L 120 200 Z" 
                   fill={selectedZone === 'z4' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
@@ -215,7 +304,6 @@ export const FanChat: React.FC = () => {
                   West Gate (z4)
                 </text>
 
-                {/* Zone 5: Metro Transit Bridge */}
                 <rect 
                   x="20" y="20" width="100" height="28" rx="4" 
                   fill={selectedZone === 'z5' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
@@ -228,7 +316,6 @@ export const FanChat: React.FC = () => {
                   Metro Bridge (z5)
                 </text>
 
-                {/* Zone 6: Fan Zone / Retail Row */}
                 <rect 
                   x="280" y="255" width="100" height="28" rx="4" 
                   fill={selectedZone === 'z6' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
@@ -243,7 +330,6 @@ export const FanChat: React.FC = () => {
               </svg>
             </div>
 
-            {/* Selected Zone Spec */}
             <div style={{ marginTop: '12px', fontSize: '13px' }}>
               {selectedZone ? (
                 (() => {
@@ -275,7 +361,6 @@ export const FanChat: React.FC = () => {
             </div>
           </div>
 
-          {/* Transport Comparison */}
           <div style={{
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
@@ -329,7 +414,6 @@ export const FanChat: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Side: Empty Chat Shell */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -338,7 +422,6 @@ export const FanChat: React.FC = () => {
           borderRadius: '12px',
           overflow: 'hidden'
         }} className="fan-chat-panel">
-          {/* Chat Header */}
           <div style={{
             padding: '16px 20px',
             borderBottom: '1px solid var(--color-border)',
@@ -350,7 +433,6 @@ export const FanChat: React.FC = () => {
             <span style={{ fontWeight: 700, fontSize: '15px' }}>Copilot Chat Assistant</span>
           </div>
 
-          {/* Static Message Area */}
           <div style={{
             flex: 1,
             padding: '20px',
@@ -359,35 +441,57 @@ export const FanChat: React.FC = () => {
             gap: '16px',
             overflowY: 'auto'
           }}>
-            <div style={{
-              alignSelf: 'flex-start',
-              backgroundColor: 'var(--color-surface-elevated)',
-              border: '1px solid var(--color-border)',
-              padding: '12px 16px',
-              borderRadius: '12px 12px 12px 4px',
-              maxWidth: '85%',
-              fontSize: '14px',
-              lineHeight: 1.5
-            }}>
-              {t.welcome}
-            </div>
-            <div style={{
-              alignSelf: 'flex-start',
-              backgroundColor: 'var(--color-surface-elevated)',
-              border: '1px solid var(--color-border)',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              maxWidth: '85%',
-              fontSize: '11px',
-              color: 'var(--color-text-muted)',
-              fontStyle: 'italic'
-            }}>
-              Notice: Backend integrations are not configured. The input below is static.
-            </div>
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                style={{
+                  alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                  backgroundColor: msg.sender === 'user' ? 'var(--color-base-bg)' : 'var(--color-surface-elevated)',
+                  border: msg.sender === 'user' ? '1px solid var(--color-pitch-green)' : '1px solid var(--color-border)',
+                  color: 'var(--color-text-primary)',
+                  padding: '12px 16px',
+                  borderRadius: msg.sender === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                  maxWidth: '85%',
+                  fontSize: '14px',
+                  lineHeight: 1.5
+                }}
+              >
+                {msg.text}
+                {msg.topic && (
+                  <span style={{
+                    display: 'block',
+                    fontSize: '9px',
+                    color: 'var(--color-text-secondary)',
+                    marginTop: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    Topic: {msg.topic}
+                  </span>
+                )}
+              </div>
+            ))}
+            {isLoading && (
+              <div style={{
+                alignSelf: 'flex-start',
+                backgroundColor: 'var(--color-surface-elevated)',
+                border: '1px solid var(--color-border)',
+                padding: '12px 16px',
+                borderRadius: '12px 12px 12px 4px',
+                maxWidth: '85%',
+                fontSize: '14px',
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span className="dot-flashing"></span>
+                <span>Thinking...</span>
+              </div>
+            )}
           </div>
 
-          {/* Chat Input Shell */}
-          <div style={{
+          <form onSubmit={handleSend} style={{
             padding: '16px 20px',
             borderTop: '1px solid var(--color-border)',
             backgroundColor: 'var(--color-surface-elevated)'
@@ -396,6 +500,8 @@ export const FanChat: React.FC = () => {
               <input 
                 type="text" 
                 placeholder={t.chatPlaceholder} 
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
                 style={{
                   flex: 1,
                   backgroundColor: 'var(--color-base-bg)',
@@ -406,13 +512,13 @@ export const FanChat: React.FC = () => {
                   fontSize: '14px',
                   outline: 'none'
                 }}
-                disabled
+                disabled={isLoading}
               />
               <button 
-                type="button" 
+                type="submit" 
                 style={{
-                  backgroundColor: 'var(--color-border)',
-                  color: 'var(--color-text-secondary)',
+                  backgroundColor: inputText.trim() && !isLoading ? 'var(--color-pitch-green)' : 'var(--color-border)',
+                  color: inputText.trim() && !isLoading ? '#040810' : 'var(--color-text-secondary)',
                   border: 'none',
                   borderRadius: '8px',
                   width: '46px',
@@ -420,20 +526,66 @@ export const FanChat: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'not-allowed'
+                  cursor: inputText.trim() && !isLoading ? 'pointer' : 'not-allowed',
+                  transition: 'background-color 0.2s, color 0.2s'
                 }}
-                disabled
+                disabled={!inputText.trim() || isLoading}
               >
                 <Send style={{ width: '18px', height: '18px' }} />
               </button>
             </div>
-          </div>
+          </form>
         </div>
-
       </div>
 
-      {/* Media query stylesheet specifically for fan layout responsiveness */}
       <style>{`
+        .dot-flashing {
+          position: relative;
+          width: 6px;
+          height: 6px;
+          border-radius: 5px;
+          background-color: var(--color-pitch-green);
+          color: var(--color-pitch-green);
+          animation: dotFlashing 1s infinite linear alternate;
+          animation-delay: .5s;
+          display: inline-block;
+          margin: 0 10px;
+        }
+        .dot-flashing::before, .dot-flashing::after {
+          content: '';
+          display: inline-block;
+          position: absolute;
+          top: 0;
+        }
+        .dot-flashing::before {
+          left: -12px;
+          width: 6px;
+          height: 6px;
+          border-radius: 5px;
+          background-color: var(--color-pitch-green);
+          color: var(--color-pitch-green);
+          animation: dotFlashing 1s infinite linear alternate;
+          animation-delay: 0s;
+        }
+        .dot-flashing::after {
+          left: 12px;
+          width: 6px;
+          height: 6px;
+          border-radius: 5px;
+          background-color: var(--color-pitch-green);
+          color: var(--color-pitch-green);
+          animation: dotFlashing 1s infinite linear alternate;
+          animation-delay: 1s;
+        }
+        @keyframes dotFlashing {
+          0% {
+            background-color: var(--color-pitch-green);
+          }
+          50%, 100% {
+            background-color: rgba(0, 230, 118, 0.2);
+          }
+        }
+
         @media (max-width: 868px) {
           .fan-grid {
             grid-template-columns: 1fr !important;

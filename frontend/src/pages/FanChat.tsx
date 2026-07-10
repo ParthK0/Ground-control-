@@ -52,13 +52,6 @@ const zones = [
   { id: 'z6', name: 'Fan Zone / Retail Row', capacity: 3000, accessible: false }
 ];
 
-const transportOptions = [
-  { mode: 'Metro / Transit', time: '35 min', co2: '1.2 kg', isGreen: true },
-  { mode: 'Rideshare (Shared)', time: '20 min', co2: '4.5 kg', isGreen: false },
-  { mode: 'Rideshare (Private)', time: '18 min', co2: '8.0 kg', isGreen: false },
-  { mode: 'Walking / Biking', time: '25–40 min', co2: '0.0 kg', isGreen: true }
-];
-
 // Client-side fallback responses and topic classifier for offline safety
 const localFallbackResponses = {
   en: {
@@ -116,6 +109,25 @@ export const FanChat: React.FC = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [transportCompare, setTransportCompare] = useState<{
+    illustrative: boolean;
+    options: Array<{ mode: string; estTime: string; estCO2: string }>;
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchTransportOptions = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/transport-compare`);
+        if (response.ok) {
+          const data = await response.json();
+          setTransportCompare(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch transport compare options:", err);
+      }
+    };
+    fetchTransportOptions();
+  }, []);
 
   const t = translations[lang];
 
@@ -379,37 +391,73 @@ export const FanChat: React.FC = () => {
               <Navigation style={{ width: '18px', height: '18px', color: 'var(--color-pitch-green)' }} />
               {t.transportTitle}
             </h2>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
-                    <th style={{ padding: '8px 4px', color: 'var(--color-text-secondary)' }}>{t.mode}</th>
-                    <th style={{ padding: '8px 4px', color: 'var(--color-text-secondary)' }}>{t.time}</th>
-                    <th style={{ padding: '8px 4px', color: 'var(--color-text-secondary)' }}>{t.emissions}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transportOptions.map((opt, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td style={{ padding: '8px 4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>{opt.mode}</span>
-                        {opt.isGreen && (
-                          <span style={{
-                            fontSize: '9px',
-                            backgroundColor: 'rgba(0, 230, 118, 0.1)',
-                            color: 'var(--color-pitch-green)',
-                            border: '1px solid rgba(0, 230, 118, 0.2)',
-                            padding: '2px 4px',
-                            borderRadius: '4px'
-                          }}>ECO</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '8px 4px' }}>{opt.time}</td>
-                      <td style={{ padding: '8px 4px', color: opt.isGreen ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)', fontWeight: 600 }}>{opt.co2}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {(transportCompare?.options || []).map((opt, i) => {
+                const co2Val = parseFloat(opt.estCO2.replace(/[^0-9.]/g, '')) || 0;
+                const isEco = co2Val <= 1.5;
+                const isWarning = co2Val > 1.5 && co2Val <= 5.0;
+                
+                const badgeColor = isEco 
+                  ? 'var(--color-pitch-green)' 
+                  : isWarning 
+                    ? 'var(--color-state-warning)' 
+                    : 'var(--color-state-critical)';
+                const badgeBg = isEco 
+                  ? 'rgba(0, 230, 118, 0.1)' 
+                  : isWarning 
+                    ? 'rgba(245, 158, 11, 0.1)' 
+                    : 'rgba(239, 68, 68, 0.1)';
+                const badgeBorder = isEco 
+                  ? 'rgba(0, 230, 118, 0.2)' 
+                  : isWarning 
+                    ? 'rgba(245, 158, 11, 0.2)' 
+                    : 'rgba(239, 68, 68, 0.2)';
+
+                return (
+                  <div key={i} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: 'var(--color-surface-elevated)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    fontSize: '13px'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{opt.mode}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>Travel Time: {opt.estTime}</span>
+                    </div>
+                    
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      color: badgeColor,
+                      backgroundColor: badgeBg,
+                      border: `1px solid ${badgeBorder}`
+                    }}>
+                      {opt.estCO2} CO₂
+                    </span>
+                  </div>
+                );
+              })}
+
+              {transportCompare?.illustrative && (
+                <div style={{
+                  fontSize: '11px',
+                  backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                  color: 'var(--color-state-warning)',
+                  border: '1px solid rgba(245, 158, 11, 0.2)',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
+                  marginTop: '4px',
+                  lineHeight: '1.4'
+                }}>
+                  ⚠️ <strong>Transparency Notice:</strong> This card uses illustrative carbon footprint estimates for environmental awareness demonstration, not live route computation.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -453,7 +501,8 @@ export const FanChat: React.FC = () => {
                   borderRadius: msg.sender === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
                   maxWidth: '85%',
                   fontSize: '14px',
-                  lineHeight: 1.5
+                  lineHeight: 1.5,
+                  animation: 'fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
               >
                 {msg.text}
@@ -483,7 +532,8 @@ export const FanChat: React.FC = () => {
                 color: 'var(--color-text-secondary)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: '8px',
+                animation: 'fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
               }}>
                 <span className="dot-flashing"></span>
                 <span>Thinking...</span>
@@ -586,7 +636,18 @@ export const FanChat: React.FC = () => {
           }
         }
 
-        @media (max-width: 868px) {
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (max-width: 767px) {
           .fan-grid {
             grid-template-columns: 1fr !important;
             overflow-y: auto !important;

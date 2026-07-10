@@ -13,9 +13,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.local_density_store = []
+    app.state.local_recommendations_store = []
+    app.state.local_alerts_store = []
+    app.state.local_incidents_store = []
+    app.state.local_briefings_store = []
     try:
         app.state.firestore = initialize_firebase()
-    except ValueError as exc:
+    except Exception as exc:
         logger.warning("Firebase Admin SDK was not initialized: %s", exc)
         app.state.firestore = None
     yield

@@ -133,7 +133,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Responsive media overrides embedded directly */}
       <style>{`
-        @media (max-width: 640px) {
+        @media (max-width: 767px) {
           .app-header {
             flex-direction: column;
             gap: 12px;

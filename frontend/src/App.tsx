@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { FanChat } from './pages/FanChat';
 import { OpsDashboard } from './pages/OpsDashboard';
 import { Layout } from './components/Layout';
-import { Compass, Activity, ArrowRight, Shield } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import './App.css';
 
 const GatewayPage: React.FC = () => {
@@ -11,112 +11,175 @@ const GatewayPage: React.FC = () => {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
       minHeight: '100vh',
       padding: '24px',
-      textAlign: 'center'
-    }}>
-      <div style={{ maxWidth: '800px', width: '100%' }}>
-        {/* Header Branding */}
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: '10px', 
-            background: 'rgba(0, 242, 254, 0.08)', 
-            border: '1px solid rgba(0, 242, 254, 0.2)', 
-            padding: '8px 16px', 
+      position: 'relative',
+      overflow: 'hidden'
+    }} className="pitch-bg">
+      {/* Top Bar for Staff Sign-In */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        width: '100%',
+        padding: '12px 24px',
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        zIndex: 20
+      }}>
+        <Link to="/ops" style={{
+          textDecoration: 'none',
+          fontSize: '13px',
+          fontWeight: 600,
+          color: 'var(--color-text-secondary)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          padding: '6px 14px',
+          borderRadius: '20px',
+          backgroundColor: 'rgba(255, 255, 255, 0.03)',
+          transition: 'all 0.2s'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = '#FFF';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'var(--color-text-secondary)';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+        }}
+        >
+          Staff sign-in
+        </Link>
+      </div>
+
+      {/* Main Hero Container */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        maxWidth: '700px',
+        margin: '0 auto',
+        textAlign: 'center',
+        zIndex: 10,
+        marginTop: '60px'
+      }}>
+        {/* Branding & Logo */}
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'rgba(0, 230, 118, 0.08)',
+            border: '1px solid rgba(0, 230, 118, 0.2)',
+            padding: '8px 16px',
             borderRadius: '24px',
-            marginBottom: '16px'
+            marginBottom: '20px'
           }}>
-            <Shield className="text-teal" style={{ width: '16px', height: '16px' }} />
-            <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '1px' }}>GROUNDCONTROL CENTRAL</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: '16px', height: '16px', color: 'var(--color-pitch-green)' }}>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              <path d="M2 12h20" />
+            </svg>
+            <span style={{ fontSize: '11px', fontWeight: 800, letterSpacing: '1.5px', color: 'var(--color-pitch-green)' }}>
+              NORTHGATE MATCHDAY COMPANION
+            </span>
           </div>
-          <h1 style={{ fontSize: '42px', marginBottom: '12px', background: 'linear-gradient(135deg, #FFF 0%, var(--text-secondary) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Stadium Operations & Fan Copilot
+
+          <h1 style={{
+            fontSize: '54px',
+            lineHeight: '1.05',
+            marginBottom: '16px',
+            textTransform: 'uppercase',
+            fontWeight: 800
+          }}>
+            Your Personal Stadium Copilot
           </h1>
-          <p className="text-secondary" style={{ fontSize: '16px', maxWidth: '600px', margin: '0 auto', lineHeight: '1.5' }}>
-            World Cup 2026 matchday assistant and command center. Fictional concept demonstrating smart crowd management and AI assistant workflows.
+
+          <p style={{
+            fontSize: '16px',
+            color: 'var(--color-text-secondary)',
+            lineHeight: '1.6',
+            marginBottom: '32px'
+          }}>
+            Unlock smart wayfinding, step-free access, multilingual support, and sustainable transit directions for the ultimate matchday experience at Northgate Stadium.
           </p>
         </div>
 
-        {/* Option Selection Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '40px' }}>
-          
-          {/* Fan Route Card */}
-          <Link to="/fan" style={{ textDecoration: 'none', color: 'inherit' }} className="gateway-card-link">
-            <div className="glass-panel gateway-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ 
-                width: '60px', 
-                height: '60px', 
-                borderRadius: '50%', 
-                background: 'rgba(0, 230, 118, 0.1)', 
-                border: '1px solid rgba(0, 230, 118, 0.3)', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                marginBottom: '20px'
-              }}>
-                <Compass className="text-pitch-green" style={{ width: '28px', height: '28px' }} />
-              </div>
-              <h2 style={{ fontSize: '22px', marginBottom: '10px' }}>Fan Assistant</h2>
-              <p className="text-muted" style={{ fontSize: '14px', lineHeight: '1.5', flexGrow: 1, marginBottom: '20px' }}>
-                Access wayfinding assistance, step-free access routing, multilingual translation support, and carbon-efficient travel options.
-              </p>
-              <div className="launch-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 700, color: 'var(--color-pitch-green)' }}>
-                Launch PWA <ArrowRight style={{ width: '16px', height: '16px' }} />
-              </div>
-            </div>
+        {/* Large Action Card / Button */}
+        <div className="floodlight-card" style={{
+          width: '100%',
+          padding: '36px',
+          textAlign: 'center',
+          maxWidth: '520px',
+          marginBottom: '32px'
+        }}>
+          <h2 style={{ fontSize: '24px', marginBottom: '8px' }}>Heading to the match?</h2>
+          <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginBottom: '24px' }}>
+            Open the live interactive portal for instant seat navigation, eco-friendly transit options, and real-time public alerts.
+          </p>
+          <Link to="/fan" className="btn-primary" style={{
+            textDecoration: 'none',
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '16px 32px',
+            fontSize: '16px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            <span>Launch Matchday Companion</span>
+            <ArrowRight style={{ width: '18px', height: '18px' }} />
           </Link>
-
-          {/* Ops Route Card */}
-          <Link to="/ops" style={{ textDecoration: 'none', color: 'inherit' }} className="gateway-card-link">
-            <div className="glass-panel gateway-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ 
-                width: '60px', 
-                height: '60px', 
-                borderRadius: '50%', 
-                background: 'rgba(0, 242, 254, 0.1)', 
-                border: '1px solid rgba(0, 242, 254, 0.3)', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                marginBottom: '20px'
-              }}>
-                <Activity className="text-teal" style={{ width: '28px', height: '28px' }} />
-              </div>
-              <h2 style={{ fontSize: '22px', marginBottom: '10px' }}>Ops Dashboard</h2>
-              <p className="text-muted" style={{ fontSize: '14px', lineHeight: '1.5', flexGrow: 1, marginBottom: '20px' }}>
-                Monitor live zone density threshold alerts, review GenAI rerouting recommendations, log incidents, and generate shift briefs.
-              </p>
-              <div className="launch-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 700, color: 'var(--color-teal)' }}>
-                Launch Command <ArrowRight style={{ width: '16px', height: '16px' }} />
-              </div>
-            </div>
-          </Link>
-
         </div>
 
-        {/* Disclaimer */}
-        <p className="text-muted" style={{ fontSize: '11px' }}>
-          GroundControl is a conceptual matchday system for Northgate Stadium. It is an unofficial demonstration and is not associated with FIFA or the World Cup.
+        {/* Features Highlights */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '16px',
+          width: '100%',
+          maxWidth: '600px',
+          marginBottom: '40px'
+        }} className="landing-features">
+          <div style={{ padding: '12px' }}>
+            <div style={{ fontSize: '20px', marginBottom: '4px' }}>🗣️</div>
+            <div style={{ fontSize: '12px', fontWeight: 700 }}>Multilingual Q&A</div>
+          </div>
+          <div style={{ padding: '12px' }}>
+            <div style={{ fontSize: '20px', marginBottom: '4px' }}>♿</div>
+            <div style={{ fontSize: '12px', fontWeight: 700 }}>Accessible Routing</div>
+          </div>
+          <div style={{ padding: '12px' }}>
+            <div style={{ fontSize: '20px', marginBottom: '4px' }}>🌿</div>
+            <div style={{ fontSize: '12px', fontWeight: 700 }}>Green Transit</div>
+          </div>
+        </div>
+
+        {/* Disclaimer / Footer */}
+        <p style={{
+          fontSize: '11px',
+          color: 'var(--color-text-muted)',
+          maxWidth: '500px',
+          margin: '0 auto',
+          lineHeight: '1.4'
+        }}>
+          GroundControl is an unofficial stadium experience concept. All trademarks, logos, and team names are the properties of their respective owners. Not affiliated with FIFA.
         </p>
       </div>
-
-      {/* Hover effects style */}
       <style>{`
-        .gateway-card {
-          cursor: pointer;
-          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s, box-shadow 0.3s !important;
-        }
-        .gateway-card-link:hover .gateway-card {
-          transform: translateY(-6px);
-          border-color: rgba(0, 242, 254, 0.3) !important;
-          box-shadow: 0 10px 30px rgba(0, 242, 254, 0.15);
-        }
-        .gateway-card-link:hover .launch-label {
-          text-decoration: underline;
+        @media (max-width: 600px) {
+          .landing-features {
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+          }
+          h1 {
+            font-size: 38px !important;
+          }
         }
       `}</style>
     </div>

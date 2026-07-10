@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,700;0,800;1,700&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
   /* Base & Surfaces */
@@ -22,6 +22,7 @@
   --color-text-muted: #6B7280;
 
   --font-primary: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
   --transition-smooth: all 0.2s ease-in-out;
 }
 
@@ -160,8 +161,57 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+/* Pitch Line Background Pattern */
+.pitch-bg {
+  background-color: #030712;
+  background-image: 
+    /* Center vertical line */
+    linear-gradient(to right, transparent 49.7%, rgba(0, 230, 118, 0.03) 49.7%, rgba(0, 230, 118, 0.03) 50.3%, transparent 50.3%),
+    /* Grass cut stripes (subtle alternating shades) */
+    repeating-linear-gradient(90deg, rgba(0, 230, 118, 0.008) 0px, rgba(0, 230, 118, 0.008) 100px, transparent 100px, transparent 200px);
+  position: relative;
+}
+
+.pitch-bg::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  height: 320px;
+  border: 2px solid rgba(0, 230, 118, 0.025);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Floodlight-glow Card treatment */
+.floodlight-card {
+  background: rgba(11, 15, 25, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 230, 118, 0.15);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 25px rgba(0, 230, 118, 0.05),
+    inset 0 0 15px rgba(0, 230, 118, 0.02);
+  border-radius: 16px;
+  padding: 20px;
+  transition: var(--transition-smooth);
+}
+
+.floodlight-card:hover {
+  border-color: rgba(0, 230, 118, 0.35);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 0 35px rgba(0, 230, 118, 0.12),
+    inset 0 0 20px rgba(0, 230, 118, 0.04);
 }
 
 /* Accessibility high contrast rules */

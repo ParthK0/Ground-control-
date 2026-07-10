@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Compass, Activity, Server, AlertTriangle } from 'lucide-react';
+import { Activity, Server, AlertTriangle } from 'lucide-react';
 import { BACKEND_URL } from '../config';
 
 interface LayoutProps {
@@ -53,58 +53,45 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
 
         {/* Navigation Tabs */}
-        <nav style={{ display: 'flex', gap: '8px' }} aria-label="Main Navigation">
+        {currentPath === '/ops' && (
           <Link
             to="/fan"
             style={{
               textDecoration: 'none',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontSize: '14px',
+              fontSize: '13px',
               fontWeight: 600,
+              color: 'var(--color-text-secondary)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: currentPath === '/fan' ? 'var(--color-surface-elevated)' : 'transparent',
-              color: currentPath === '/fan' ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)',
-              border: currentPath === '/fan' ? '1px solid var(--color-border)' : '1px solid transparent',
-              transition: 'all 0.2s'
+              transition: 'color 0.2s, border-color 0.2s',
+              border: '1px solid var(--color-border)',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              backgroundColor: 'var(--color-surface-elevated)'
             }}
-            className="nav-link"
-          >
-            <Compass style={{ width: '16px', height: '16px' }} />
-            <span>Fan App</span>
-          </Link>
-          <Link
-            to="/ops"
-            style={{
-              textDecoration: 'none',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: currentPath === '/ops' ? 'var(--color-surface-elevated)' : 'transparent',
-              color: currentPath === '/ops' ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)',
-              border: currentPath === '/ops' ? '1px solid var(--color-border)' : '1px solid transparent',
-              transition: 'all 0.2s'
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--color-pitch-green)';
+              e.currentTarget.style.borderColor = 'rgba(0, 230, 118, 0.3)';
             }}
-            className="nav-link"
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--color-text-secondary)';
+              e.currentTarget.style.borderColor = 'var(--color-border)';
+            }}
           >
-            <Activity style={{ width: '16px', height: '16px' }} />
-            <span>Ops Dashboard</span>
+            ← Exit to Fan App
           </Link>
-        </nav>
+        )}
 
         {/* Deploy Ready Environment Indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="env-indicator">
-          <Server style={{ width: '14px', height: '14px', color: 'var(--color-cyber-teal)' }} />
-          <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'monospace' }}>
-            {BACKEND_URL ? `API: ${BACKEND_URL}` : 'API: (LOCAL MOCK)'}
-          </span>
-        </div>
+        {window.location.search.includes('debug=true') && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="env-indicator">
+            <Server style={{ width: '14px', height: '14px', color: 'var(--color-cyber-teal)' }} />
+            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'monospace' }}>
+              {BACKEND_URL ? `API: ${BACKEND_URL}` : 'API: (LOCAL MOCK)'}
+            </span>
+          </div>
+        )}
       </header>
 
       {/* Main Screen Content */}

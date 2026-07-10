@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, MapPin, Navigation, Globe, HelpCircle } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { BACKEND_URL } from '../config';
 
 type Language = 'en' | 'es' | 'fr';
@@ -10,7 +10,7 @@ const translations = {
     chatPlaceholder: "Ask about gates, food, accessibility, or transit...",
     send: "Send",
     mapTitle: "Interactive Venue Map",
-    mapSelectZone: "Select a zone to query details (Scaffold mode)",
+    mapSelectZone: "Select a stand or area to query details",
     transportTitle: "Eco-Transport Comparison",
     mode: "Transport Mode",
     time: "Travel Time",
@@ -22,7 +22,7 @@ const translations = {
     chatPlaceholder: "Pregunta sobre accesos, comida, accesibilidad o transporte...",
     send: "Enviar",
     mapTitle: "Mapa Interactivo del Estadio",
-    mapSelectZone: "Selecciona una zona (Modo de andamiaje)",
+    mapSelectZone: "Selecciona una zona para ver detalles",
     transportTitle: "Comparación de Transporte Ecológico",
     mode: "Modo de Transporte",
     time: "Tiempo de Viaje",
@@ -34,7 +34,7 @@ const translations = {
     chatPlaceholder: "Posez des questions sur les portes, la nourriture, l'accessibilité...",
     send: "Envoyer",
     mapTitle: "Carte Interactive du Stade",
-    mapSelectZone: "Sélectionnez une zone (Mode d'échafaudage)",
+    mapSelectZone: "Sélectionnez une zone pour voir les détails",
     transportTitle: "Comparaison des Transports Verts",
     mode: "Mode de Transport",
     time: "Temps de Trajet",
@@ -44,19 +44,19 @@ const translations = {
 };
 
 const zones = [
-  { id: 'z1', name: 'North Concourse', capacity: 4000, accessible: true },
-  { id: 'z2', name: 'South Concourse', capacity: 4000, accessible: true },
-  { id: 'z3', name: 'East Gate Plaza', capacity: 2500, accessible: false },
-  { id: 'z4', name: 'West Gate Plaza', capacity: 2500, accessible: true },
-  { id: 'z5', name: 'Metro Transit Bridge', capacity: 6000, accessible: true },
-  { id: 'z6', name: 'Fan Zone / Retail Row', capacity: 3000, accessible: false }
+  { id: 'z1', name: 'North Stand', capacity: 4000, accessible: true },
+  { id: 'z2', name: 'South Stand', capacity: 4000, accessible: true },
+  { id: 'z3', name: 'East Plaza', capacity: 2500, accessible: false },
+  { id: 'z4', name: 'West Plaza', capacity: 2500, accessible: true },
+  { id: 'z5', name: 'Metro Bridge', capacity: 6000, accessible: true },
+  { id: 'z6', name: 'Fan Zone', capacity: 3000, accessible: false }
 ];
 
 // Client-side fallback responses and topic classifier for offline safety
 const localFallbackResponses = {
   en: {
-    wayfinding: "To navigate Northgate Stadium, refer to the venue map. Gates A & B link to the North & South Concourses (z1 & z2), Gate C links to the East Gate Plaza (z3), and Gate D links to the West Gate Plaza (z4). The Metro Transit Bridge is z5 and Retail Row is z6.",
-    accessibility: "Northgate Stadium is committed to accessibility. Gates A, B, and D provide fully accessible step-free routes. Note that Gate C (East Gate Plaza / z3) and Retail Row (z6) are steps-only and do not have ramp access.",
+    wayfinding: "To navigate Northgate Stadium, refer to the venue map. Gates A & B link to the North & South Stands (z1 & z2), Gate C links to the East Plaza (z3), and Gate D links to the West Plaza (z4). The Metro Transit Bridge is z5 and Retail Row is z6.",
+    accessibility: "Northgate Stadium is committed to accessibility. Gates A, B, and D provide fully accessible step-free routes. Note that Gate C (East Plaza / z3) and Retail Row (z6) are steps-only and do not have ramp access.",
     transport: "For eco-friendly transit, we recommend the Metro/transit option (35 min, 1.2 kg CO₂). Walking or biking takes 25–40 min with ~0 kg CO₂. Rideshare options emit 4.5 kg CO₂ (shared) to 8.0 kg CO₂ (private) per round trip.",
     general: "Welcome to GroundControl! I can help you with wayfinding, accessibility info, or transport comparisons for Northgate Stadium. Please ask your question."
   },
@@ -101,10 +101,48 @@ const classifyLocalTopic = (message: string): 'wayfinding' | 'accessibility' | '
   return "general";
 };
 
+// Generic Football Icons - scoreboard matchday theme
+const SoccerBallIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} style={{ width: '18px', height: '18px', ...style }}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    <path d="M2 12h20" />
+  </svg>
+);
+
+const WhistleIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} style={{ width: '18px', height: '18px', ...style }}>
+    <path d="M9 5h6v4h-6z" />
+    <path d="M15 7h4a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-4" />
+    <path d="M3 13a4 4 0 0 0 6 3.46V9H3a4 4 0 0 0 0 4z" />
+    <path d="M9 13h6" />
+  </svg>
+);
+
+const FloodlightIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} style={{ width: '18px', height: '18px', ...style }}>
+    <path d="M8 22l2-14M16 22l-2-14" />
+    <path d="M10 8h4v4h-4z" />
+    <circle cx="9" cy="5" r="1" />
+    <circle cx="12" cy="5" r="1" />
+    <circle cx="15" cy="5" r="1" />
+    <path d="M6 6h12v2H6z" />
+  </svg>
+);
+
+const TurnstileIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} style={{ width: '18px', height: '18px', ...style }}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M3 12h18" />
+    <path d="M12 3v18" />
+    <circle cx="12" cy="12" r="3" fill="var(--color-base-bg)" />
+  </svg>
+);
+
 export const FanChat: React.FC = () => {
   const [lang, setLang] = useState<Language>('en');
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant', text: string, topic?: string }>>([
+  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant'; text: string; topic?: string }>>([
     { sender: 'assistant', text: translations['en'].welcome }
   ]);
   const [inputText, setInputText] = useState('');
@@ -119,29 +157,28 @@ export const FanChat: React.FC = () => {
       try {
         const response = await fetch(`${BACKEND_URL}/transport-compare`);
         if (response.ok) {
-          const data = await response.json();
-          setTransportCompare(data);
+          const data = await response.ok ? await response.json() : null;
+          if (data) setTransportCompare(data);
         }
       } catch (err) {
-        console.error("Failed to fetch transport compare options:", err);
+        console.error("Failed to fetch transport comparison options:", err);
       }
     };
     fetchTransportOptions();
   }, []);
 
-  const t = translations[lang];
-
   useEffect(() => {
+    const welcomeText = translations[lang].welcome;
     if (messages.length === 1 && messages[0].sender === 'assistant') {
-      setMessages([{ sender: 'assistant', text: t.welcome }]);
+      setMessages([{ sender: 'assistant', text: welcomeText }]);
     }
-  }, [lang, messages, t.welcome]);
+  }, [lang, messages]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isLoading) return;
 
-    const userMessage = inputText.trim();
+    const userMessage = inputText;
     setInputText('');
     setMessages(prev => [...prev, { sender: 'user', text: userMessage }]);
     setIsLoading(true);
@@ -175,13 +212,14 @@ export const FanChat: React.FC = () => {
     }
   };
 
+  const t = translations[lang];
+
   return (
-    <div style={{
+    <div className="pitch-bg" style={{
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
       width: '100%',
-      backgroundColor: 'var(--color-base-bg)',
       fontFamily: 'var(--font-primary)'
     }}>
       <div style={{
@@ -191,10 +229,11 @@ export const FanChat: React.FC = () => {
         padding: '12px 24px',
         backgroundColor: 'var(--color-surface)',
         borderBottom: '1px solid var(--color-border)',
-        gap: '12px'
+        gap: '12px',
+        zIndex: 5
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Globe style={{ width: '16px', height: '16px', color: 'var(--color-cyber-teal)' }} />
+          <WhistleIcon style={{ color: 'var(--color-pitch-green)' }} />
           <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Select Language:</span>
           <select 
             value={lang} 
@@ -216,7 +255,7 @@ export const FanChat: React.FC = () => {
             <option value="fr">Français (FR)</option>
           </select>
         </div>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600 }} className="desktop-only">
+        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }} className="desktop-only">
           Northgate Stadium Fan Copilot
         </span>
       </div>
@@ -227,7 +266,8 @@ export const FanChat: React.FC = () => {
         gap: '24px',
         padding: '24px',
         flex: 1,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        zIndex: 2
       }}>
         <div style={{
           display: 'flex',
@@ -236,27 +276,24 @@ export const FanChat: React.FC = () => {
           overflowY: 'auto'
         }} className="fan-side-panel">
           
-          <div style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '12px',
-            padding: '20px'
-          }}>
+          <div className="floodlight-card">
             <h2 style={{
-              fontSize: '16px',
-              fontWeight: 700,
+              fontSize: '18px',
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
               marginBottom: '16px',
               color: 'var(--color-text-primary)',
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
             }}>
-              <MapPin style={{ width: '18px', height: '18px', color: 'var(--color-pitch-green)' }} />
+              <FloodlightIcon style={{ color: 'var(--color-pitch-green)' }} />
               {t.mapTitle}
             </h2>
             
             <div style={{
-              backgroundColor: 'var(--color-surface-elevated)',
+              backgroundColor: 'var(--color-base-bg)',
               borderRadius: '8px',
               padding: '16px',
               border: '1px solid var(--color-border)',
@@ -265,79 +302,89 @@ export const FanChat: React.FC = () => {
               alignItems: 'center'
             }}>
               <svg viewBox="0 0 400 300" style={{ width: '100%', maxHeight: '220px' }} aria-label="Northgate Stadium Venue Zones Map">
-                <rect x="140" y="100" width="120" height="100" rx="8" fill="rgba(0, 230, 118, 0.05)" stroke="rgba(0, 230, 118, 0.2)" strokeWidth="2" strokeDasharray="3" />
-                <circle cx="200" cy="150" r="24" fill="none" stroke="rgba(0, 230, 118, 0.15)" strokeWidth="2" />
-                
+                {/* Stadium Center Green Pitch */}
+                <rect x="130" y="105" width="140" height="90" rx="4" fill="#0f4625" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
+                <circle cx="200" cy="150" r="18" fill="none" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
+                <line x1="200" y1="105" x2="200" y2="195" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
+                <rect x="130" y="130" width="16" height="40" fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" />
+                <rect x="254" y="130" width="16" height="40" fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" />
+
+                {/* North Stand Stand/Zone (z1) */}
                 <path 
-                  d="M 100 60 L 300 60 L 270 90 L 130 90 Z" 
-                  fill={selectedZone === 'z1' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
-                  stroke="var(--color-border)" 
+                  d="M 100 45 L 300 45 L 260 90 L 140 90 Z" 
+                  fill={selectedZone === 'z1' ? 'rgba(0, 230, 118, 0.25)' : 'rgba(0, 230, 118, 0.03)'} 
+                  stroke={selectedZone === 'z1' ? 'var(--color-pitch-green)' : 'var(--color-border)'} 
                   strokeWidth="2" 
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => setSelectedZone('z1')}
                 />
-                <text x="200" y="78" fill="var(--color-text-primary)" fontSize="10" fontWeight="bold" textAnchor="middle" pointerEvents="none">
-                  North Concourse (z1)
+                <text x="200" y="70" fill="var(--color-text-primary)" fontSize="10" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  North Stand
                 </text>
 
+                {/* South Stand Stand/Zone (z2) */}
                 <path 
-                  d="M 100 240 L 300 240 L 270 210 L 130 210 Z" 
-                  fill={selectedZone === 'z2' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
-                  stroke="var(--color-border)" 
+                  d="M 100 255 L 300 255 L 260 210 L 140 210 Z" 
+                  fill={selectedZone === 'z2' ? 'rgba(0, 230, 118, 0.25)' : 'rgba(0, 230, 118, 0.03)'} 
+                  stroke={selectedZone === 'z2' ? 'var(--color-pitch-green)' : 'var(--color-border)'} 
                   strokeWidth="2" 
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => setSelectedZone('z2')}
                 />
-                <text x="200" y="228" fill="var(--color-text-primary)" fontSize="10" fontWeight="bold" textAnchor="middle" pointerEvents="none">
-                  South Concourse (z2)
+                <text x="200" y="238" fill="var(--color-text-primary)" fontSize="10" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  South Stand
                 </text>
 
+                {/* East Plaza Zone (z3) */}
                 <path 
-                  d="M 280 100 L 340 70 L 340 230 L 280 200 Z" 
-                  fill={selectedZone === 'z3' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
-                  stroke="var(--color-border)" 
+                  d="M 280 95 L 350 70 L 350 230 L 280 205 Z" 
+                  fill={selectedZone === 'z3' ? 'rgba(0, 230, 118, 0.25)' : 'rgba(0, 230, 118, 0.03)'} 
+                  stroke={selectedZone === 'z3' ? 'var(--color-pitch-green)' : 'var(--color-border)'} 
                   strokeWidth="2" 
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => setSelectedZone('z3')}
                 />
-                <text x="310" y="150" fill="var(--color-text-primary)" fontSize="9" fontWeight="bold" textAnchor="middle" transform="rotate(90 310 150)" pointerEvents="none">
-                  East Gate (z3)
+                <text x="318" y="153" fill="var(--color-text-primary)" fontSize="9" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  East Plaza
                 </text>
 
+                {/* West Plaza Zone (z4) */}
                 <path 
-                  d="M 120 100 L 60 70 L 60 230 L 120 200 Z" 
-                  fill={selectedZone === 'z4' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
-                  stroke="var(--color-border)" 
+                  d="M 120 95 L 50 70 L 50 230 L 120 205 Z" 
+                  fill={selectedZone === 'z4' ? 'rgba(0, 230, 118, 0.25)' : 'rgba(0, 230, 118, 0.03)'} 
+                  stroke={selectedZone === 'z4' ? 'var(--color-pitch-green)' : 'var(--color-border)'} 
                   strokeWidth="2" 
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => setSelectedZone('z4')}
                 />
-                <text x="90" y="150" fill="var(--color-text-primary)" fontSize="9" fontWeight="bold" textAnchor="middle" transform="rotate(-90 90 150)" pointerEvents="none">
-                  West Gate (z4)
+                <text x="82" y="153" fill="var(--color-text-primary)" fontSize="9" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  West Plaza
                 </text>
 
-                <rect 
-                  x="20" y="20" width="100" height="28" rx="4" 
-                  fill={selectedZone === 'z5' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
-                  stroke="var(--color-border)" 
+                {/* Metro Transit Bridge (z5) */}
+                <path 
+                  d="M 15 20 L 95 20 L 105 45 L 25 45 Z" 
+                  fill={selectedZone === 'z5' ? 'rgba(0, 230, 118, 0.25)' : 'rgba(0, 230, 118, 0.03)'} 
+                  stroke={selectedZone === 'z5' ? 'var(--color-pitch-green)' : 'var(--color-border)'} 
                   strokeWidth="2" 
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => setSelectedZone('z5')}
                 />
-                <text x="70" y="37" fill="var(--color-text-primary)" fontSize="8" fontWeight="bold" textAnchor="middle" pointerEvents="none">
-                  Metro Bridge (z5)
+                <text x="58" y="36" fill="var(--color-text-primary)" fontSize="8" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Metro Bridge
                 </text>
 
-                <rect 
-                  x="280" y="255" width="100" height="28" rx="4" 
-                  fill={selectedZone === 'z6' ? 'rgba(0, 230, 118, 0.15)' : 'transparent'} 
-                  stroke="var(--color-border)" 
+                {/* Fan Zone / Retail Row (z6) */}
+                <path 
+                  d="M 305 255 L 385 255 L 375 280 L 295 280 Z" 
+                  fill={selectedZone === 'z6' ? 'rgba(0, 230, 118, 0.25)' : 'rgba(0, 230, 118, 0.03)'} 
+                  stroke={selectedZone === 'z6' ? 'var(--color-pitch-green)' : 'var(--color-border)'} 
                   strokeWidth="2" 
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => setSelectedZone('z6')}
                 />
-                <text x="330" y="272" fill="var(--color-text-primary)" fontSize="8" fontWeight="bold" textAnchor="middle" pointerEvents="none">
-                  Fan Zone (z6)
+                <text x="340" y="271" fill="var(--color-text-primary)" fontSize="8" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Fan Zone
                 </text>
               </svg>
             </div>
@@ -354,8 +401,8 @@ export const FanChat: React.FC = () => {
                       borderRadius: '8px'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                        <span>{z?.name}</span>
-                        <span style={{ color: z?.accessible ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)' }}>
+                        <span style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>{z?.name}</span>
+                        <span style={{ color: z?.accessible ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)', fontSize: '12px' }}>
                           {z?.accessible ? '♿ Accessible Route' : 'Steps Only'}
                         </span>
                       </div>
@@ -373,22 +420,19 @@ export const FanChat: React.FC = () => {
             </div>
           </div>
 
-          <div style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '12px',
-            padding: '20px'
-          }}>
+          <div className="floodlight-card">
             <h2 style={{
-              fontSize: '16px',
-              fontWeight: 700,
+              fontSize: '18px',
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
               marginBottom: '16px',
               color: 'var(--color-text-primary)',
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
             }}>
-              <Navigation style={{ width: '18px', height: '18px', color: 'var(--color-pitch-green)' }} />
+              <SoccerBallIcon style={{ color: 'var(--color-pitch-green)' }} />
               {t.transportTitle}
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -400,18 +444,18 @@ export const FanChat: React.FC = () => {
                 const badgeColor = isEco 
                   ? 'var(--color-pitch-green)' 
                   : isWarning 
-                    ? 'var(--color-state-warning)' 
-                    : 'var(--color-state-critical)';
+                  ? 'var(--color-state-warning)' 
+                  : 'var(--color-state-critical)';
                 const badgeBg = isEco 
                   ? 'rgba(0, 230, 118, 0.1)' 
                   : isWarning 
-                    ? 'rgba(245, 158, 11, 0.1)' 
-                    : 'rgba(239, 68, 68, 0.1)';
+                  ? 'rgba(245, 158, 11, 0.1)' 
+                  : 'rgba(239, 68, 68, 0.1)';
                 const badgeBorder = isEco 
                   ? 'rgba(0, 230, 118, 0.2)' 
                   : isWarning 
-                    ? 'rgba(245, 158, 11, 0.2)' 
-                    : 'rgba(239, 68, 68, 0.2)';
+                  ? 'rgba(245, 158, 11, 0.2)' 
+                  : 'rgba(239, 68, 68, 0.2)';
 
                 return (
                   <div key={i} style={{
@@ -465,11 +509,8 @@ export const FanChat: React.FC = () => {
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: 'var(--color-surface)',
-          border: '1px solid var(--color-border)',
-          borderRadius: '12px',
           overflow: 'hidden'
-        }} className="fan-chat-panel">
+        }} className="floodlight-card fan-chat-panel">
           <div style={{
             padding: '16px 20px',
             borderBottom: '1px solid var(--color-border)',
@@ -477,8 +518,8 @@ export const FanChat: React.FC = () => {
             alignItems: 'center',
             gap: '8px'
           }}>
-            <HelpCircle style={{ width: '18px', height: '18px', color: 'var(--color-pitch-green)' }} />
-            <span style={{ fontWeight: 700, fontSize: '15px' }}>Copilot Chat Assistant</span>
+            <TurnstileIcon style={{ color: 'var(--color-pitch-green)' }} />
+            <span style={{ fontWeight: 800, fontSize: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Copilot Chat Assistant</span>
           </div>
 
           <div style={{

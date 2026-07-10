@@ -3,8 +3,8 @@ import uuid
 import json
 import logging
 import requests
-from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Request, Depends, status
+from typing import Dict, List, Optional
+from fastapi import APIRouter, Request, Depends, status
 
 from app.core.config import get_settings, Settings
 from app.models.briefing_schemas import BriefingRequest, BriefingResponse, BriefingSection
@@ -174,7 +174,7 @@ async def create_briefing(
     doc_data = {
         "id": mock_id,
         "role": briefing_in.role,
-        "sections": parsed_sections,
+        "sections": [s.model_dump() for s in parsed_sections],
         "timestamp": timestamp
     }
     request.app.state.local_briefings_store.append(doc_data)

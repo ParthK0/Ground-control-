@@ -3,8 +3,8 @@ import uuid
 import json
 import logging
 import requests
-from typing import Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Request, Depends, status
+from typing import Dict, Any
+from fastapi import APIRouter, Request, Depends, status
 
 from app.core.config import get_settings, Settings
 from app.models.incident_schemas import IncidentRequest, IncidentResponse

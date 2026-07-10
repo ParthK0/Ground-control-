@@ -3,7 +3,6 @@ import uuid
 import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, Request, status
-from google.cloud import firestore
 
 from app.models.recommendation_schemas import RecommendationResponse
 

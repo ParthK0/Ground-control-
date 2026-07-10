@@ -135,7 +135,7 @@ export const FanChat: React.FC = () => {
     if (messages.length === 1 && messages[0].sender === 'assistant') {
       setMessages([{ sender: 'assistant', text: t.welcome }]);
     }
-  }, [lang]);
+  }, [lang, messages, t.welcome]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();

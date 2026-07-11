@@ -13,6 +13,28 @@ from app.models.briefing_schemas import BriefingRequest, BriefingResponse, Brief
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Module-level constant — defined once, not recreated per request
+BRIEFING_SYSTEM_INSTRUCTIONS = """
+You are GroundControl Volunteer Coordinator.
+Generate a structured, role-specific shift briefing for volunteers at Northgate Stadium.
+
+TAXONOMY & CONTEXT:
+The venue has 6 zones:
+- z1: North Concourse (Capacity: 4000, Accessible Route)
+- z2: South Concourse (Capacity: 4000, Accessible Route)
+- z3: East Gate Plaza (Capacity: 2500, No Accessible Route, steps only)
+- z4: West Gate Plaza (Capacity: 2500, Accessible Route)
+- z5: Metro Transit Bridge (Capacity: 6000, Accessible Route)
+- z6: Fan Zone / Retail Row (Capacity: 3000, No Accessible Route)
+
+Instructions:
+1. Generate 3 key sections for the volunteer role.
+2. For each section, provide a concise 'heading' and a detailed 'body'.
+3. Inject the optional shiftContext if provided.
+4. The output must strictly match the JSON response schema.
+5. Wherever a time, distance, shift duration, wait time, or capacity estimate is knowable from the data supplied, you must state it as a number in the sections' bodies, not a vague adjective (e.g. state capacities like 2500, or shift lengths in hours/minutes).
+"""
+
 DEMO_BRIEFINGS = {
     "Gate Volunteer": [
         {"heading": "Shift Overview & Duties", "body": "Monitor gate lines, scan tickets, and greet fans as they enter. Direct fans to their seat blocks."},
@@ -44,32 +66,9 @@ def generate_briefing_demo(role: str, shift_context: Optional[str] = None) -> Li
     return sections
 
 async def generate_briefing_live(role: str, shift_context: Optional[str], settings: Settings) -> List[Dict[str, str]]:
-    api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": settings.gemini_api_key
-    }
-    
-    SYSTEM_INSTRUCTIONS = """
-You are GroundControl Volunteer Coordinator.
-Generate a structured, role-specific shift briefing for volunteers at Northgate Stadium.
-
-TAXONOMY & CONTEXT:
-The venue has 6 zones:
-- z1: North Concourse (Capacity: 4000, Accessible Route)
-- z2: South Concourse (Capacity: 4000, Accessible Route)
-- z3: East Gate Plaza (Capacity: 2500, No Accessible Route, steps only)
-- z4: West Gate Plaza (Capacity: 2500, Accessible Route)
-- z5: Metro Transit Bridge (Capacity: 6000, Accessible Route)
-- z6: Fan Zone / Retail Row (Capacity: 3000, No Accessible Route)
-
-Instructions:
-1. Generate 3 key sections for the volunteer role.
-2. For each section, provide a concise 'heading' and a detailed 'body'.
-3. Inject the optional shiftContext if provided.
-4. The output must strictly match the JSON response schema.
-5. Wherever a time, distance, shift duration, wait time, or capacity estimate is knowable from the data supplied, you must state it as a number in the sections' bodies, not a vague adjective (e.g. state capacities like 2500, or shift lengths in hours/minutes).
-"""
+    api_key = settings.gemini_api_key
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
 
     payload = {
         "contents": [
@@ -84,7 +83,7 @@ Instructions:
         "systemInstruction": {
             "parts": [
                 {
-                    "text": SYSTEM_INSTRUCTIONS
+                    "text": BRIEFING_SYSTEM_INSTRUCTIONS
                 }
             ]
         },
@@ -120,7 +119,7 @@ Instructions:
         async with httpx.AsyncClient() as client:
             response = await client.post(api_url, json=payload, headers=headers, timeout=5.0)
         if response.status_code != 200:
-            logger.error(f"Gemini API briefing error: {response.status_code} - {response.text}")
+            logger.error("Gemini API briefing error: %s - %s", response.status_code, response.text)
             raise Exception("Gemini API call failed")
 
         res_data = response.json()
@@ -128,7 +127,7 @@ Instructions:
         data = json.loads(raw_text)
         return data["sections"]
     except Exception as err:
-        logger.error(f"Failed to fetch briefing from Gemini: {err}")
+        logger.error("Failed to fetch briefing from Gemini: %s", err)
         raise
 
 @router.post("/briefing", response_model=BriefingResponse, status_code=status.HTTP_200_OK)
@@ -175,7 +174,7 @@ async def create_briefing(
                 timestamp=timestamp
             )
         except Exception as err:
-            logger.error(f"Failed to write briefing to Firestore: {err}")
+            logger.error("Failed to write briefing to Firestore: %s", err)
 
     # Local store fallback
     mock_id = f"brief_{uuid.uuid4().hex}"

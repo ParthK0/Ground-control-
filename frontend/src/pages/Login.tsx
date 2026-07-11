@@ -118,7 +118,7 @@ export const Login: React.FC = () => {
         {!useTokenBypass ? (
           <form onSubmit={handleFirebaseLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-              <label style={{
+              <label htmlFor="login-email" style={{
                 display: 'block',
                 fontSize: '11px',
                 textTransform: 'uppercase',
@@ -137,6 +137,7 @@ export const Login: React.FC = () => {
                   color: 'var(--color-text-muted)'
                 }} />
                 <input
+                  id="login-email"
                   type="email"
                   required
                   placeholder="name@stadiumops.com"
@@ -157,7 +158,7 @@ export const Login: React.FC = () => {
             </div>
 
             <div>
-              <label style={{
+              <label htmlFor="login-password" style={{
                 display: 'block',
                 fontSize: '11px',
                 textTransform: 'uppercase',
@@ -176,6 +177,7 @@ export const Login: React.FC = () => {
                   color: 'var(--color-text-muted)'
                 }} />
                 <input
+                  id="login-password"
                   type="password"
                   required
                   placeholder="••••••••"
@@ -240,7 +242,7 @@ export const Login: React.FC = () => {
         ) : (
           <form onSubmit={handleBypassLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-              <label style={{
+              <label htmlFor="login-bypass-token" style={{
                 display: 'block',
                 fontSize: '11px',
                 textTransform: 'uppercase',
@@ -259,6 +261,7 @@ export const Login: React.FC = () => {
                   color: 'var(--color-text-muted)'
                 }} />
                 <input
+                  id="login-bypass-token"
                   type="password"
                   required
                   placeholder="Enter STAFF_AUTH_SECRET"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Users, Volume2, Monitor, VolumeX } from 'lucide-react';
 import { collection, query, orderBy, limit, onSnapshot, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -46,6 +46,14 @@ const zonesConfig = [
   { id: 'z5', name: 'Metro Transit Bridge', capacity: 6000, accessibleRoute: true },
   { id: 'z6', name: 'Fan Zone / Retail Row', capacity: 3000, accessibleRoute: false }
 ];
+
+const getAuthHeaders = (extra: Record<string, string> = {}) => {
+  const token = sessionStorage.getItem('staff_token') || '';
+  return {
+    ...extra,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+};
 
 export const OpsDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'zones' | 'recs' | 'incidents' | 'briefings' | 'translator'>('zones');
@@ -95,7 +103,7 @@ export const OpsDashboard: React.FC = () => {
   const prevCriticalCountRef = useRef(0);
 
   // Web Audio Alert Beep
-  const triggerAudioBeep = (freq = 880, duration = 0.25) => {
+  const triggerAudioBeep = useCallback((freq = 880, duration = 0.25) => {
     if (!audioAlertsEnabled) return;
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -113,15 +121,7 @@ export const OpsDashboard: React.FC = () => {
     } catch (e) {
       console.warn("Audio Alert Context not supported or allowed yet:", e);
     }
-  };
-
-  const getAuthHeaders = (extra: Record<string, string> = {}) => {
-    const token = sessionStorage.getItem('staff_token') || '';
-    return {
-      ...extra,
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    };
-  };
+  }, [audioAlertsEnabled]);
 
   const handleTranslate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,7 +222,7 @@ export const OpsDashboard: React.FC = () => {
     return config ? config.name : zoneId;
   };
 
-  const fetchInitialReadings = async () => {
+  const fetchInitialReadings = useCallback(async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/density-readings`, {
         headers: getAuthHeaders()
@@ -251,9 +251,9 @@ export const OpsDashboard: React.FC = () => {
     } catch (err) {
       console.error("Failed to fetch initial density readings:", err);
     }
-  };
+  }, [triggerAudioBeep]);
 
-  const fetchRecommendationsList = async () => {
+  const fetchRecommendationsList = useCallback(async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/recommendations`, {
         headers: getAuthHeaders()
@@ -265,9 +265,9 @@ export const OpsDashboard: React.FC = () => {
     } catch (err) {
       console.error("Failed to fetch recommendations list:", err);
     }
-  };
+  }, []);
 
-  const fetchOpsSummary = async () => {
+  const fetchOpsSummary = useCallback(async () => {
     setIsLoadingSummary(true);
     try {
       const response = await fetch(`${BACKEND_URL}/ops-summary`, {
@@ -284,7 +284,7 @@ export const OpsDashboard: React.FC = () => {
     } finally {
       setIsLoadingSummary(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchInitialReadings();
@@ -395,7 +395,7 @@ export const OpsDashboard: React.FC = () => {
       if (unsubscribeIncidents) unsubscribeIncidents();
       if (intervalId) clearInterval(intervalId);
     };
-  }, [audioAlertsEnabled]);
+  }, [fetchInitialReadings, fetchRecommendationsList, fetchOpsSummary, triggerAudioBeep]);
 
   const handleApprove = async (id: string) => {
     try {

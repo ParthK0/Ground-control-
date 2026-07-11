@@ -4,18 +4,9 @@ import httpx
 import json
 from typing import Dict, Any
 from app.core.config import Settings
+from app.core.constants import ZONE_CAPACITIES, RECOMMENDATION_COOLDOWN_SECS, DENSITY_THRESHOLD_PCT
 
 logger = logging.getLogger(__name__)
-
-# Zone capacities from SEED_DATA.md
-ZONE_CAPACITIES = {
-    "z1": 4000,
-    "z2": 4000,
-    "z3": 2500,
-    "z4": 2500,
-    "z5": 6000,
-    "z6": 3000
-}
 
 # 2-minute per-zone debounce cache.
 # Note: This resets on backend restart, which is an acceptable limitation for v1.
@@ -30,7 +21,7 @@ def check_density_threshold(zone_id: str, value: float) -> bool:
         return False
     capacity = ZONE_CAPACITIES[zone_id]
     pct = (value / capacity) * 100
-    return pct >= 85
+    return pct >= DENSITY_THRESHOLD_PCT
 
 def is_zone_in_cooldown(zone_id: str) -> bool:
     """
@@ -39,8 +30,7 @@ def is_zone_in_cooldown(zone_id: str) -> bool:
     last_time = RECOMMENDATION_COOLDOWN.get(zone_id)
     if last_time is None:
         return False
-    # 2 minutes = 120 seconds
-    return (time.time() - last_time) < 120
+    return (time.time() - last_time) < RECOMMENDATION_COOLDOWN_SECS
 
 def set_zone_cooldown(zone_id: str):
     """
@@ -236,7 +226,7 @@ Instructions:
 
         # Validate severity enum
         if sev not in ["low", "medium", "high", "critical"]:
-            logger.warning(f"Invalid severity level '{sev}' from Gemini. Defaulting to 'high'.")
+            logger.warning("Invalid severity level '%s' from Gemini. Defaulting to 'high'.", sev)
             sev = "high"
 
         return {
@@ -413,7 +403,7 @@ Instructions:
             return fallback
 
         if sev not in ["low", "medium", "high", "critical"]:
-            logger.warning(f"Invalid severity level '{sev}' from Gemini. Defaulting to 'medium'.")
+            logger.warning("Invalid severity level '%s' from Gemini. Defaulting to 'medium'.", sev)
             sev = "medium"
 
         return {

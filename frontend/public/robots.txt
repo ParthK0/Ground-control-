@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ground-control-chi.vercel.app/sitemap.xml

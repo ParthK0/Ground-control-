@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Volume2, Mic, Compass } from 'lucide-react';
+import { Compass } from 'lucide-react';
 import { BACKEND_URL } from '../config';
+import { ChatWindow } from '../components/fan/ChatWindow';
+import { VenueMap } from '../components/fan/VenueMap';
+import { TransportPanel } from '../components/fan/TransportPanel';
 
 type Language = 'en' | 'es' | 'fr';
 type ViewType = 'home' | 'chat' | 'map' | 'transit' | 'trip';
@@ -147,28 +150,32 @@ export const FanChat: React.FC = () => {
   // Update initial welcome message if language changes
   useEffect(() => {
     const welcomeText = translations[lang].welcome;
-    if (messages.length === 1 && messages[0].sender === 'assistant' && messages[0].text !== welcomeText) {
-      setMessages([{ sender: 'assistant', text: welcomeText }]);
-    }
+    setMessages(prev => {
+      if (prev.length === 1 && prev[0].sender === 'assistant' && prev[0].text !== welcomeText) {
+        return [{ sender: 'assistant', text: welcomeText }];
+      }
+      return prev;
+    });
   }, [lang]);
 
   const speakMessage = (text: string) => {
     if (!text) return;
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      const utterance = new SynthesisUtterance(text);
+      const SpeechSynthesisUtteranceClass =
+        (window as any).SpeechSynthesisUtterance ||
+        (window as any).webkitSpeechSynthesisUtterance;
+      if (!SpeechSynthesisUtteranceClass) return;
+      const utterance = new SpeechSynthesisUtteranceClass(text);
       const langMap: Record<Language, string> = {
-        'en': 'en-US',
-        'es': 'es-ES',
-        'fr': 'fr-FR'
+        en: 'en-US',
+        es: 'es-ES',
+        fr: 'fr-FR',
       };
       utterance.lang = langMap[lang] || 'en-US';
       window.speechSynthesis.speak(utterance);
     }
   };
-
-  // Helper for voice speak
-  const SynthesisUtterance = (window as any).SpeechSynthesisUtterance || (window as any).webkitSpeechSynthesisUtterance;
 
   const handleSend = async (textToSend: string) => {
     if (!textToSend.trim() || isLoading) return;
@@ -660,391 +667,43 @@ export const FanChat: React.FC = () => {
 
         {/* B. COPILOT CHAT VIEW */}
         {view === 'chat' && (
-          <div style={{
-            maxWidth: '750px',
-            margin: '0 auto',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '12px',
-            overflow: 'hidden'
-          }}>
-            {/* Header info */}
-            <div style={{
-              padding: '12px 20px',
-              borderBottom: '1px solid var(--color-border)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: 'var(--color-surface-elevated)'
-            }}>
-              <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase' }}>
-                Copilot Conversation
-              </span>
-              {accessibilityNeeded && (
-                <span style={{ fontSize: '10px', color: 'var(--color-cyber-teal)', fontWeight: 700 }}>
-                  ♿ Step-free routes enabled
-                </span>
-              )}
-            </div>
-
-            {/* Chat Messages */}
-            <div
-              ref={chatContainerRef}
-              style={{
-                flex: 1,
-                padding: '20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-                overflowY: 'auto',
-                minHeight: '350px'
-              }}
-            >
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                    backgroundColor: msg.sender === 'user' ? 'var(--team-accent-bg)' : 'var(--color-surface-elevated)',
-                    border: '1px solid',
-                    borderColor: msg.sender === 'user' ? 'var(--team-accent)' : 'var(--color-border)',
-                    padding: '12px 16px',
-                    borderRadius: msg.sender === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-                    maxWidth: '85%',
-                    fontSize: '14px',
-                    lineHeight: '1.5',
-                    position: 'relative'
-                  }}
-                >
-                  <div>{msg.text}</div>
-                  
-                  {msg.sender === 'assistant' && (
-                    <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => speakMessage(msg.text)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--team-accent)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          padding: 0
-                        }}
-                        title="Read aloud"
-                      >
-                        <Volume2 style={{ width: '12px', height: '12px' }} /> Speak
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              
-              {isLoading && (
-                <div style={{
-                  alignSelf: 'flex-start',
-                  backgroundColor: 'var(--color-surface-elevated)',
-                  border: '1px solid var(--color-border)',
-                  padding: '12px 16px',
-                  borderRadius: '12px 12px 12px 4px',
-                  maxWidth: '85%',
-                  fontSize: '14px',
-                  color: 'var(--color-text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <span className="dot-flashing"></span>
-                  <span>Thinking...</span>
-                </div>
-              )}
-            </div>
-
-            {/* Input Bar */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (inputText.trim()) {
-                  handleSend(inputText);
-                  setInputText('');
-                }
-              }}
-              style={{
-                padding: '16px 20px',
-                borderTop: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-surface-elevated)'
-              }}
-            >
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  placeholder={t.chatPlaceholder}
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'var(--color-base-bg)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '8px',
-                    color: '#FFF',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                  disabled={isLoading}
-                />
-                
-                {/* Voice button */}
-                <button
-                  type="button"
-                  onClick={handleVoiceInput}
-                  style={{
-                    backgroundColor: isListening ? 'var(--color-state-critical)' : 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '8px',
-                    width: '46px',
-                    height: '46px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: isListening ? '#FFF' : 'var(--color-text-primary)'
-                  }}
-                  title="Push to talk"
-                >
-                  <Mic style={{ width: '18px', height: '18px' }} className={isListening ? 'breathing-pulse' : ''} />
-                </button>
-
-                <button
-                  type="submit"
-                  style={{
-                    backgroundColor: inputText.trim() && !isLoading ? 'var(--team-accent)' : 'var(--color-border)',
-                    color: inputText.trim() && !isLoading ? '#040810' : 'var(--color-text-secondary)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    width: '46px',
-                    height: '46px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: inputText.trim() && !isLoading ? 'pointer' : 'not-allowed'
-                  }}
-                  disabled={!inputText.trim() || isLoading}
-                >
-                  <Send style={{ width: '18px', height: '18px' }} />
-                </button>
-              </div>
-            </form>
-          </div>
+          <ChatWindow
+            messages={messages}
+            isLoading={isLoading}
+            accessibilityNeeded={accessibilityNeeded}
+            chatContainerRef={chatContainerRef as React.RefObject<HTMLDivElement>}
+            teamAccent={teamColor}
+            inputText={inputText}
+            setInputText={setInputText}
+            isListening={isListening}
+            onSend={handleSend}
+            onVoiceInput={handleVoiceInput}
+            onSpeak={speakMessage}
+            placeholder={t.chatPlaceholder}
+          />
         )}
+
 
         {/* C. MAP VIEW */}
         {view === 'map' && (
-          <div style={{ maxWidth: '750px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div className="broadcast-card" style={{ padding: '24px' }}>
-              <h2 style={{ fontSize: '18px', textTransform: 'uppercase', marginBottom: '16px' }}>
-                {t.mapTitle}
-              </h2>
-              
-              <div style={{
-                backgroundColor: 'var(--color-base-bg)',
-                borderRadius: '8px',
-                padding: '20px',
-                border: '1px solid var(--color-border)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}>
-                <svg viewBox="0 0 400 300" style={{ width: '100%', maxHeight: '250px' }} aria-label="Northgate Stadium Venue Zones Map">
-                  {/* Stadium Center Green Pitch */}
-                  <rect x="130" y="105" width="140" height="90" rx="4" fill="#0f4625" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
-                  <circle cx="200" cy="150" r="18" fill="none" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
-                  <line x1="200" y1="105" x2="200" y2="195" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
-
-                  {/* North Stand Stand/Zone (z1) */}
-                  <path 
-                    d="M 100 45 L 300 45 L 260 90 L 140 90 Z" 
-                    fill={selectedZone === 'z1' ? 'var(--team-accent-bg)' : 'rgba(0, 230, 118, 0.03)'} 
-                    stroke={selectedZone === 'z1' ? 'var(--team-accent)' : 'var(--color-border)'} 
-                    strokeWidth="2" 
-                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-                    onClick={() => setSelectedZone('z1')}
-                    className="breathing-pulse"
-                  />
-                  <text x="200" y="70" fill="#FFF" fontSize="10" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    North Stand
-                  </text>
-
-                  {/* South Stand Stand/Zone (z2) */}
-                  <path 
-                    d="M 100 255 L 300 255 L 260 210 L 140 210 Z" 
-                    fill={selectedZone === 'z2' ? 'var(--team-accent-bg)' : 'rgba(0, 230, 118, 0.03)'} 
-                    stroke={selectedZone === 'z2' ? 'var(--team-accent)' : 'var(--color-border)'} 
-                    strokeWidth="2" 
-                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-                    onClick={() => setSelectedZone('z2')}
-                    className="breathing-pulse"
-                  />
-                  <text x="200" y="238" fill="#FFF" fontSize="10" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    South Stand
-                  </text>
-
-                  {/* East Plaza Zone (z3) */}
-                  <path 
-                    d="M 280 95 L 350 70 L 350 230 L 280 205 Z" 
-                    fill={selectedZone === 'z3' ? 'var(--team-accent-bg)' : 'rgba(0, 230, 118, 0.03)'} 
-                    stroke={selectedZone === 'z3' ? 'var(--team-accent)' : 'var(--color-border)'} 
-                    strokeWidth="2" 
-                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-                    onClick={() => setSelectedZone('z3')}
-                    className="breathing-pulse"
-                  />
-                  <text x="318" y="153" fill="#FFF" fontSize="9" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    East Plaza
-                  </text>
-
-                  {/* West Plaza Zone (z4) */}
-                  <path 
-                    d="M 120 95 L 50 70 L 50 230 L 120 205 Z" 
-                    fill={selectedZone === 'z4' ? 'var(--team-accent-bg)' : 'rgba(0, 230, 118, 0.03)'} 
-                    stroke={selectedZone === 'z4' ? 'var(--team-accent)' : 'var(--color-border)'} 
-                    strokeWidth="2" 
-                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-                    onClick={() => setSelectedZone('z4')}
-                    className="breathing-pulse"
-                  />
-                  <text x="82" y="153" fill="#FFF" fontSize="9" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    West Plaza
-                  </text>
-
-                  {/* Metro Transit Bridge (z5) */}
-                  <path 
-                    d="M 15 20 L 95 20 L 105 45 L 25 45 Z" 
-                    fill={selectedZone === 'z5' ? 'var(--team-accent-bg)' : 'rgba(0, 230, 118, 0.03)'} 
-                    stroke={selectedZone === 'z5' ? 'var(--team-accent)' : 'var(--color-border)'} 
-                    strokeWidth="2" 
-                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-                    onClick={() => setSelectedZone('z5')}
-                    className="breathing-pulse"
-                  />
-                  <text x="58" y="36" fill="#FFF" fontSize="8" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Metro Bridge
-                  </text>
-
-                  {/* Fan Zone / Retail Row (z6) */}
-                  <path 
-                    d="M 305 255 L 385 255 L 375 280 L 295 280 Z" 
-                    fill={selectedZone === 'z6' ? 'var(--team-accent-bg)' : 'rgba(0, 230, 118, 0.03)'} 
-                    stroke={selectedZone === 'z6' ? 'var(--team-accent)' : 'var(--color-border)'} 
-                    strokeWidth="2" 
-                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
-                    onClick={() => setSelectedZone('z6')}
-                    className="breathing-pulse"
-                  />
-                  <text x="340" y="271" fill="#FFF" fontSize="8" fontWeight="bold" textAnchor="middle" pointerEvents="none" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Fan Zone
-                  </text>
-                </svg>
-              </div>
-
-              {selectedZone ? (
-                <div style={{ marginTop: '16px', backgroundColor: 'var(--color-surface-elevated)', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
-                  <h3 style={{ textTransform: 'uppercase', color: 'var(--team-accent)', fontSize: '15px' }}>
-                    {zones.find(z => z.id === selectedZone)?.name}
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px', fontSize: '13px' }}>
-                    <div>
-                      <span style={{ color: 'var(--color-text-secondary)' }}>Capacity limit:</span>
-                      <strong style={{ display: 'block', color: '#FFF' }}>{zones.find(z => z.id === selectedZone)?.capacity} fans</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--color-text-secondary)' }}>Access Type:</span>
-                      <strong style={{ display: 'block', color: zones.find(z => z.id === selectedZone)?.accessible ? 'var(--color-pitch-green)' : 'var(--color-state-critical)' }}>
-                        {zones.find(z => z.id === selectedZone)?.accessible ? '♿ Step-Free Accessible' : '⚠️ Steps-Only'}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '12px', marginTop: '12px', textAlign: 'center' }}>
-                  {t.mapSelectZone}
-                </p>
-              )}
-            </div>
-          </div>
+          <VenueMap
+            zones={zones}
+            selectedZone={selectedZone}
+            onSelectZone={setSelectedZone}
+            mapTitle={t.mapTitle}
+            mapSelectZone={t.mapSelectZone}
+          />
         )}
+
 
         {/* D. TRANSIT VIEW */}
         {view === 'transit' && (
-          <div style={{ maxWidth: '750px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div className="broadcast-card" style={{ padding: '24px' }}>
-              <h2 style={{ fontSize: '18px', textTransform: 'uppercase', marginBottom: '8px' }}>
-                {t.transportTitle}
-              </h2>
-              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>
-                Compare transport modes based on efficiency and CO₂ environmental savings.
-              </p>
-
-              {/* Warnings */}
-              {transportCompare?.reasoning && (
-                <div style={{
-                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                  border: '1px solid rgba(245, 158, 11, 0.2)',
-                  borderRadius: '6px',
-                  padding: '12px 16px',
-                  marginBottom: '20px',
-                  fontSize: '13px',
-                  color: 'var(--color-state-warning)'
-                }}>
-                  <strong>Matchday Notice:</strong> {transportCompare.reasoning}
-                </div>
-              )}
-
-              {/* Transit compare table */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {transportCompare?.options.map((opt, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      backgroundColor: 'var(--color-surface-elevated)',
-                      border: '1px solid var(--color-border)',
-                      padding: '16px 20px',
-                      borderRadius: '6px'
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 700, color: '#FFF' }}>{opt.mode}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                        Time: {opt.estTime}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{
-                        backgroundColor: parseFloat(opt.estCO2) <= 1.5 ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255,255,255,0.05)',
-                        color: parseFloat(opt.estCO2) <= 1.5 ? 'var(--color-pitch-green)' : 'var(--color-text-primary)',
-                        padding: '4px 10px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 700
-                      }}>
-                        {opt.estCO2} CO₂
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <TransportPanel
+            transportCompare={transportCompare}
+            transportTitle={t.transportTitle}
+          />
         )}
+
 
         {/* E. MY TRIP VIEW */}
         {view === 'trip' && (

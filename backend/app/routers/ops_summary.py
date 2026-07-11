@@ -6,29 +6,13 @@ from google.cloud import firestore
 
 from app.core.config import get_settings, Settings
 from app.core.auth import require_staff_auth
+from app.core.constants import ZONE_CAPACITIES, ZONE_NAMES
 from app.core.weather import MOCK_WEATHER_SIGNAL
 from app.models.ops_summary_schemas import OpsSummaryResponse
 
 router = APIRouter()
 logger = logging.getLogger("ops_summary")
 
-ZONE_CAPACITIES = {
-    "z1": 4000,  # North Concourse
-    "z2": 4000,  # South Concourse
-    "z3": 2500,  # East Gate Plaza
-    "z4": 2500,  # West Gate Plaza
-    "z5": 6000,  # Metro Transit Bridge
-    "z6": 3000   # Fan Zone / Retail Row
-}
-
-ZONE_NAMES = {
-    "z1": "North Concourse",
-    "z2": "South Concourse",
-    "z3": "East Gate Plaza",
-    "z4": "West Gate Plaza",
-    "z5": "Metro Transit Bridge",
-    "z6": "Fan Zone / Retail Row"
-}
 
 SYSTEM_INSTRUCTIONS = """
 You are GroundControl Stadium Operations Synthesizer.

@@ -6,7 +6,6 @@ import { Home } from './pages/Home';
 import { HostVenues } from './pages/HostVenues';
 import { AccessibilityCommitment } from './pages/AccessibilityCommitment';
 import { Login } from './pages/Login';
-import { QualityEvidence } from './pages/QualityEvidence';
 import { Layout } from './components/Layout';
 import './App.css';
 
@@ -32,7 +31,6 @@ export const App: React.FC = () => {
         } />
         <Route path="/venues" element={<Layout><HostVenues /></Layout>} />
         <Route path="/accessibility" element={<Layout><AccessibilityCommitment /></Layout>} />
-        <Route path="/quality" element={<Layout><QualityEvidence /></Layout>} />
       </Routes>
     </Router>
   );

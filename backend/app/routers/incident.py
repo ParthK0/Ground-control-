@@ -170,14 +170,14 @@ Instructions:
         async with httpx.AsyncClient() as client:
             response = await client.post(api_url, json=payload, headers=headers, timeout=5.0)
         if response.status_code != 200:
-            logger.error(f"Gemini API incident classification error: {response.status_code} - {response.text}")
+            logger.error("Gemini API incident classification error: %s - %s", response.status_code, response.text)
             raise Exception("Gemini API call failed")
 
         res_data = response.json()
         raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
         return json.loads(raw_text)
     except Exception as err:
-        logger.error(f"Failed to fetch incident classification from Gemini: {err}")
+        logger.error("Failed to fetch incident classification from Gemini: %s", err)
         raise
 
 ZONE_MAPPING = {
@@ -279,8 +279,9 @@ async def create_incident(
     flagged = False
     if category not in ALLOWED_CATEGORIES or severity not in ALLOWED_SEVERITIES:
         logger.warning(
-            f"Invalid incident classification values: category='{category}', severity='{severity}'. "
-            "Flagging for manual staff review."
+            "Invalid incident classification values: category='%s', severity='%s'. Flagging for manual staff review.",
+            category,
+            severity
         )
         category = "other"
         severity = None
@@ -316,7 +317,7 @@ async def create_incident(
                 timestamp=timestamp.isoformat()
             )
         except Exception as err:
-            logger.error(f"Failed to write incident to Firestore: {err}")
+            logger.error("Failed to write incident to Firestore: %s", err)
 
     # Fallback to local store
     mock_id = f"inc_{uuid.uuid4().hex}"

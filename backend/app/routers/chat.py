@@ -143,6 +143,10 @@ Instructions:
     status_code=status.HTTP_200_OK,
 )
 async def chat(request_data: ChatRequest, settings: Settings = Depends(get_settings)) -> ChatResponse:
+    if not request_data.message.strip():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message cannot be empty.")
+        
     # Ensure language is lowercase for lookup safety
     lang = request_data.language.lower()
     if lang not in ["en", "es", "fr"]:
@@ -217,7 +221,7 @@ async def chat(request_data: ChatRequest, settings: Settings = Depends(get_setti
             response = await client.post(api_url, json=payload, headers=headers, timeout=5.0)
         
         if response.status_code != 200:
-            logger.error(f"Gemini API returned error code {response.status_code}: {response.text}")
+            logger.error("Gemini API returned error code %s: %s", response.status_code, response.text)
             return fallback_response
 
         res_data = response.json()
@@ -235,8 +239,8 @@ async def chat(request_data: ChatRequest, settings: Settings = Depends(get_setti
         return ChatResponse(answer=answer_text, topic=topic_text)
 
     except httpx.HTTPError as exc:
-        logger.error(f"Request to Gemini API failed or timed out: {exc}")
+        logger.error("Request to Gemini API failed or timed out: %s", exc)
         return fallback_response
     except (KeyError, IndexError, json.JSONDecodeError) as exc:
-        logger.error(f"Failed to parse structured response from Gemini: {exc}")
+        logger.error("Failed to parse structured response from Gemini: %s", exc)
         return fallback_response

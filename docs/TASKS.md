@@ -23,6 +23,7 @@ first — they're additive on top of the "done" definition in SPEC.md, not core 
       checked at both desktop and mobile widths for both `/fan` and `/ops`, README
       (check against the duplicate-content disqualification from last time before
       submitting), demo video, final Cursor review pass
+- [x] **M8 — Gaps & Refinements**: `POST /ops-summary` endpoint, simulated weather signal, and quantified Gemini output contracts.
 
 One task "in progress" at a time. When prompting an AI tool, reference the doc section —
 e.g. *"Build `/density` per ARCHITECTURE.md's data flow step 2, with the validation rule

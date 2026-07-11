@@ -2,11 +2,12 @@ import datetime
 import uuid
 import json
 import logging
-import requests
+import httpx
 from typing import Dict, Any
 from fastapi import APIRouter, Request, Depends, status
 
 from app.core.config import get_settings, Settings
+from app.core.auth import require_staff_auth
 from app.models.incident_schemas import IncidentRequest, IncidentResponse
 
 router = APIRouter()
@@ -94,11 +95,15 @@ def classify_incident_demo(text: str) -> Dict[str, Any]:
         "draftComms": demo_inc["draftComms"]
     }
 
-def classify_incident_live(text: str, settings: Settings) -> Dict[str, Any]:
+async def classify_incident_live(text: str, settings: Settings) -> Dict[str, Any]:
     """
     Call Gemini structured output API to classify an incident.
     """
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.gemini_api_key}"
+    api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": settings.gemini_api_key
+    }
     
     SYSTEM_INSTRUCTIONS = """
 You are GroundControl Stadium Operations incident classifier.
@@ -114,6 +119,7 @@ Instructions:
 3. Generate a draftResponse: a short staff-facing response suggestion outlining what actions the stadium operations center should take.
 4. Generate a draftComms: a public-facing communication alert message suitable for public address announcements or fan notifications.
 5. The response must be a JSON object matching the schema.
+6. Wherever a time, distance, or wait estimate is knowable from the data supplied (e.g. arrival estimates, wait times, or zone occupancy), you must state it as a number in the draft fields, not a vague adjective.
 """
 
     payload = {
@@ -161,7 +167,8 @@ Instructions:
     }
 
     try:
-        response = requests.post(api_url, json=payload, headers={"Content-Type": "application/json"}, timeout=5.0)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(api_url, json=payload, headers=headers, timeout=5.0)
         if response.status_code != 200:
             logger.error(f"Gemini API incident classification error: {response.status_code} - {response.text}")
             raise Exception("Gemini API call failed")
@@ -173,11 +180,72 @@ Instructions:
         logger.error(f"Failed to fetch incident classification from Gemini: {err}")
         raise
 
+ZONE_MAPPING = {
+    "z1": ["z1", "zone 1", "north concourse", "gate a"],
+    "z2": ["z2", "zone 2", "south concourse", "gate b"],
+    "z3": ["z3", "zone 3", "east gate plaza", "gate c"],
+    "z4": ["z4", "zone 4", "west gate plaza", "gate d"],
+    "z5": ["z5", "zone 5", "metro transit bridge", "transit bridge"],
+    "z6": ["z6", "zone 6", "fan zone", "retail row"]
+}
+
+ADJACENCY_DISTANCES = {
+    "z1": {
+        "medical": {"id": "m1", "name": "North Medical Post", "distance": 0},
+        "security": {"id": "s1", "name": "North Security Command", "distance": 0}
+    },
+    "z2": {
+        "medical": {"id": "m2", "name": "South Medical Post", "distance": 0},
+        "security": {"id": "s2", "name": "South Security Command", "distance": 0}
+    },
+    "z3": {
+        "medical": {"id": "m2", "name": "South Medical Post", "distance": 150},
+        "security": {"id": "s3", "name": "East Security Post", "distance": 0}
+    },
+    "z4": {
+        "medical": {"id": "m3", "name": "West Medical Post", "distance": 0},
+        "security": {"id": "s1", "name": "North Security Command", "distance": 150}
+    },
+    "z5": {
+        "medical": {"id": "m1", "name": "North Medical Post", "distance": 100},
+        "security": {"id": "s1", "name": "North Security Command", "distance": 100}
+    },
+    "z6": {
+        "medical": {"id": "m2", "name": "South Medical Post", "distance": 120},
+        "security": {"id": "s2", "name": "South Security Command", "distance": 120}
+    }
+}
+
+def extract_zone_from_text(text: str) -> str:
+    text_lower = text.lower()
+    for zone_id, keywords in ZONE_MAPPING.items():
+        if any(kw in text_lower for kw in keywords):
+            return zone_id
+    return "z1"
+
+def append_nearest_resources(category: str, text: str, draft_response: str) -> str:
+    zone_id = extract_zone_from_text(text)
+    distances = ADJACENCY_DISTANCES.get(zone_id, ADJACENCY_DISTANCES["z1"])
+    
+    med = distances["medical"]
+    sec = distances["security"]
+    
+    resource_line = ""
+    if category == "medical":
+        resource_line = f" Nearest Medical Resource: {med['name']} ({med['distance']}m away in zone {zone_id})."
+    elif category in ["security", "crowd_control"]:
+        resource_line = f" Nearest Security Resource: {sec['name']} ({sec['distance']}m away in zone {zone_id})."
+    else:
+        resource_line = f" Nearest Resources: {med['name']} ({med['distance']}m) & {sec['name']} ({sec['distance']}m)."
+        
+    return f"{draft_response.strip()}{resource_line}"
+
 @router.post("/incident", response_model=IncidentResponse, status_code=status.HTTP_200_OK)
 async def create_incident(
     request: Request,
     incident_in: IncidentRequest,
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
+    staff: dict = Depends(require_staff_auth)
 ) -> IncidentResponse:
     db = request.app.state.firestore
     timestamp = datetime.datetime.now(datetime.timezone.utc)
@@ -193,7 +261,7 @@ async def create_incident(
             classification = classify_incident_demo(incident_in.text)
         else:
             try:
-                classification = classify_incident_live(incident_in.text, settings)
+                classification = await classify_incident_live(incident_in.text, settings)
             except Exception:
                 # Fallback on api error
                 classification = classify_incident_demo(incident_in.text)
@@ -203,6 +271,10 @@ async def create_incident(
     severity = classification.get("severity")
     draft_response = classification.get("draftResponse", "")
     draft_comms = classification.get("draftComms", "")
+
+    # Append nearest medical/security resource based on adjacency data
+    if category in ALLOWED_CATEGORIES and severity in ALLOWED_SEVERITIES:
+        draft_response = append_nearest_resources(category, incident_in.text, draft_response)
 
     flagged = False
     if category not in ALLOWED_CATEGORIES or severity not in ALLOWED_SEVERITIES:

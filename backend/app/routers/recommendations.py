@@ -2,15 +2,19 @@ import datetime
 import uuid
 import logging
 from typing import List
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Depends, status
 
+from app.core.auth import require_staff_auth
 from app.models.recommendation_schemas import RecommendationResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.get("/recommendations", response_model=List[RecommendationResponse])
-async def list_recommendations(request: Request) -> List[RecommendationResponse]:
+async def list_recommendations(
+    request: Request,
+    staff: dict = Depends(require_staff_auth)
+) -> List[RecommendationResponse]:
     """
     List all pending recommendations.
     """
@@ -62,7 +66,11 @@ async def list_recommendations(request: Request) -> List[RecommendationResponse]
 
 
 @router.post("/recommendations/{id}/approve", status_code=status.HTTP_200_OK)
-async def approve_recommendation(request: Request, id: str):
+async def approve_recommendation(
+    request: Request,
+    id: str,
+    staff: dict = Depends(require_staff_auth)
+):
     """
     Approve a recommendation, writing its alerts to the public alerts collection.
     """

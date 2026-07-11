@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -17,11 +18,13 @@ const hasFirebaseConfig =
   import.meta.env.VITE_FIREBASE_PROJECT_ID !== 'test';
 
 let db: any = null;
+let auth: any = null;
 
 if (hasFirebaseConfig) {
   try {
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    auth = getAuth(app);
   } catch (error) {
     console.warn("Failed to initialize Firebase Web SDK:", error);
   }
@@ -29,4 +32,4 @@ if (hasFirebaseConfig) {
   // No valid Firebase credentials — silent fallback to API polling mode
 }
 
-export { db };
+export { db, auth };

@@ -2,11 +2,12 @@ import datetime
 import uuid
 import json
 import logging
-import requests
+import httpx
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Request, Depends, status
 
 from app.core.config import get_settings, Settings
+from app.core.auth import require_staff_auth
 from app.models.briefing_schemas import BriefingRequest, BriefingResponse, BriefingSection
 
 router = APIRouter()
@@ -42,8 +43,12 @@ def generate_briefing_demo(role: str, shift_context: Optional[str] = None) -> Li
         ]
     return sections
 
-def generate_briefing_live(role: str, shift_context: Optional[str], settings: Settings) -> List[Dict[str, str]]:
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.gemini_api_key}"
+async def generate_briefing_live(role: str, shift_context: Optional[str], settings: Settings) -> List[Dict[str, str]]:
+    api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": settings.gemini_api_key
+    }
     
     SYSTEM_INSTRUCTIONS = """
 You are GroundControl Volunteer Coordinator.
@@ -63,6 +68,7 @@ Instructions:
 2. For each section, provide a concise 'heading' and a detailed 'body'.
 3. Inject the optional shiftContext if provided.
 4. The output must strictly match the JSON response schema.
+5. Wherever a time, distance, shift duration, wait time, or capacity estimate is knowable from the data supplied, you must state it as a number in the sections' bodies, not a vague adjective (e.g. state capacities like 2500, or shift lengths in hours/minutes).
 """
 
     payload = {
@@ -111,7 +117,8 @@ Instructions:
     }
 
     try:
-        response = requests.post(api_url, json=payload, headers={"Content-Type": "application/json"}, timeout=5.0)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(api_url, json=payload, headers=headers, timeout=5.0)
         if response.status_code != 200:
             logger.error(f"Gemini API briefing error: {response.status_code} - {response.text}")
             raise Exception("Gemini API call failed")
@@ -128,7 +135,8 @@ Instructions:
 async def create_briefing(
     request: Request,
     briefing_in: BriefingRequest,
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
+    staff: dict = Depends(require_staff_auth)
 ) -> BriefingResponse:
     db = request.app.state.firestore
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -144,7 +152,7 @@ async def create_briefing(
             sections = generate_briefing_demo(briefing_in.role, briefing_in.shiftContext)
         else:
             try:
-                sections = generate_briefing_live(briefing_in.role, briefing_in.shiftContext, settings)
+                sections = await generate_briefing_live(briefing_in.role, briefing_in.shiftContext, settings)
             except Exception:
                 sections = generate_briefing_demo(briefing_in.role, briefing_in.shiftContext)
 

@@ -53,35 +53,191 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
 
         {/* Navigation Tabs */}
-        {currentPath === '/ops' && (
-          <Link
-            to="/fan"
-            style={{
-              textDecoration: 'none',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: 'var(--color-text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'color 0.2s, border-color 0.2s',
-              border: '1px solid var(--color-border)',
-              padding: '6px 12px',
-              borderRadius: '6px',
-              backgroundColor: 'var(--color-surface-elevated)'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--color-pitch-green)';
-              e.currentTarget.style.borderColor = 'rgba(0, 230, 118, 0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'var(--color-text-secondary)';
-              e.currentTarget.style.borderColor = 'var(--color-border)';
-            }}
-          >
-            ← Exit to Fan App
-          </Link>
-        )}
+        {/* Navigation Tabs */}
+        <div style={{ display: 'flex', gap: '10px' }} className="nav-links">
+          {currentPath !== '/' && (
+            <Link
+              to="/"
+              style={{
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'color 0.2s, border-color 0.2s',
+                border: '1px solid var(--color-border)',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: 'var(--color-surface-elevated)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-pitch-green)';
+                e.currentTarget.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+              }}
+            >
+              🏠 Home
+            </Link>
+          )}
+
+          {currentPath !== '/venues' && (
+            <Link
+              to="/venues"
+              style={{
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'color 0.2s, border-color 0.2s',
+                border: '1px solid var(--color-border)',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: 'var(--color-surface-elevated)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-pitch-green)';
+                e.currentTarget.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+              }}
+            >
+              🏟️ Host Venues
+            </Link>
+          )}
+
+          {currentPath !== '/accessibility' && (
+            <Link
+              to="/accessibility"
+              style={{
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'color 0.2s, border-color 0.2s',
+                border: '1px solid var(--color-border)',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: 'var(--color-surface-elevated)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-pitch-green)';
+                e.currentTarget.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+              }}
+            >
+              ♿ Accessibility
+            </Link>
+          )}
+
+          {currentPath === '/ops' && (
+            <Link
+              to="/fan"
+              style={{
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'color 0.2s, border-color 0.2s',
+                border: '1px solid var(--color-border)',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: 'var(--color-surface-elevated)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-pitch-green)';
+                e.currentTarget.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+              }}
+            >
+              📢 Fan App
+            </Link>
+          )}
+
+          {currentPath === '/fan' && (
+            <Link
+              to="/ops"
+              style={{
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'color 0.2s, border-color 0.2s',
+                border: '1px solid var(--color-border)',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: 'var(--color-surface-elevated)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-pitch-green)';
+                e.currentTarget.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+              }}
+            >
+              🛡️ Ops Dashboard
+            </Link>
+          )}
+
+          {sessionStorage.getItem('staff_token') && (
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('staff_token');
+                sessionStorage.removeItem('staff_email');
+                window.location.href = '/login';
+              }}
+              style={{
+                background: 'none',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                color: '#ef4444',
+                fontSize: '13px',
+                fontWeight: 600,
+                padding: '6px 12px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+                backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.05)';
+              }}
+            >
+              🚪 Logout
+            </button>
+          )}
+        </div>
 
         {/* Deploy Ready Environment Indicator */}
         {window.location.search.includes('debug=true') && (
@@ -101,7 +257,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Shared Footer with Disclaimer */}
       <footer style={{
-        padding: '16px 24px',
+        padding: '24px 24px',
         backgroundColor: 'var(--color-surface)',
         borderTop: '1px solid var(--color-border)',
         textAlign: 'center',
@@ -109,6 +265,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         color: 'var(--color-text-muted)',
         zIndex: 10
       }}>
+        {/* Footer Navigation */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <Link to="/" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Home</Link>
+          <span style={{ color: 'var(--color-border)' }}>|</span>
+          <Link to="/venues" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Host Venues</Link>
+          <span style={{ color: 'var(--color-border)' }}>|</span>
+          <Link to="/accessibility" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Accessibility</Link>
+          <span style={{ color: 'var(--color-border)' }}>|</span>
+          <Link to="/ops" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none', fontWeight: 600 }}>For Organizers</Link>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '4px' }}>
           <AlertTriangle style={{ width: '12px', height: '12px', color: 'var(--color-text-muted)' }} />
           <span>Fictional Demonstration Concept</span>

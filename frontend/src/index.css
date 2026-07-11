@@ -219,3 +219,68 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   outline: 3px solid var(--color-cyber-teal);
   outline-offset: 2px;
 }
+
+/* Broadcast Redesign Accents & Animations */
+:root {
+  --team-accent: #00E676;
+  --team-accent-bg: rgba(0, 230, 118, 0.08);
+}
+
+.tabular-numbers {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.broadcast-card {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--team-accent);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: var(--transition-smooth);
+}
+
+.broadcast-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 16px 16px 0;
+  border-color: transparent var(--team-accent) transparent transparent;
+  pointer-events: none;
+}
+
+.broadcast-card:hover {
+  background: var(--color-surface-elevated);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.95; }
+}
+
+.breathing-pulse {
+  animation: breathe 3s infinite ease-in-out;
+}
+
+@keyframes slide-in-broadcast {
+  0% { transform: translateY(120%) skewX(-6deg); opacity: 0; }
+  80% { transform: translateY(-5px) skewX(-6deg); opacity: 1; }
+  100% { transform: translateY(0) skewX(0); opacity: 1; }
+}
+
+.broadcast-alert {
+  animation: slide-in-broadcast 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  border-left: 6px solid var(--color-state-critical);
+  clip-path: polygon(0 0, 100% 0, 99% 100%, 0 100%);
+}
+
+.diagonal-transition {
+  transition: transform 0.4s cubic-bezier(0.77, 0, 0.175, 1);
+}
+

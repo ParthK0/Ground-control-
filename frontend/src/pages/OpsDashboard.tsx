@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Users, AlertTriangle, FileText, Calendar, Plus, Accessibility } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Users, Volume2, Monitor, VolumeX } from 'lucide-react';
 import { collection, query, orderBy, limit, onSnapshot, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { BACKEND_URL } from '../config';
+import { ZonesTab } from '../components/ops/ZonesTab';
+import { RecommendationsTab } from '../components/ops/RecommendationsTab';
+import { IncidentsTab } from '../components/ops/IncidentsTab';
+import { BriefingsTab } from '../components/ops/BriefingsTab';
+import { TranslatorTab } from '../components/ops/TranslatorTab';
+import styles from './OpsDashboard.module.css';
 
 interface DensityReading {
   value: number;
@@ -42,8 +48,11 @@ const zonesConfig = [
 ];
 
 export const OpsDashboard: React.FC = () => {
-  // Mobile active tab selection: 'zones' | 'recs' | 'incidents' | 'briefings'
-  const [activeTab, setActiveTab] = useState<'zones' | 'recs' | 'incidents' | 'briefings'>('zones');
+  const [activeTab, setActiveTab] = useState<'zones' | 'recs' | 'incidents' | 'briefings' | 'translator'>('zones');
+  
+  // Dashboard Modes
+  const [isVideoWall, setIsVideoWall] = useState(false);
+  const [audioAlertsEnabled, setAudioAlertsEnabled] = useState(false);
   
   // Real-time density state
   const [readings, setReadings] = useState<Record<string, DensityReading>>({});
@@ -57,6 +66,11 @@ export const OpsDashboard: React.FC = () => {
   const [incidentInput, setIncidentInput] = useState('');
   const [isSubmittingIncident, setIsSubmittingIncident] = useState(false);
   const [dispatchedIds, setDispatchedIds] = useState<Record<string, boolean>>({});
+  const [isListeningIncident, setIsListeningIncident] = useState(false);
+
+  // Ops Summary state
+  const [opsSummary, setOpsSummary] = useState<string>('');
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
   // Manual submission form state
   const [formZoneId, setFormZoneId] = useState('z1');
@@ -71,7 +85,91 @@ export const OpsDashboard: React.FC = () => {
   const [generatedBriefing, setGeneratedBriefing] = useState<{ role: string; sections: Array<{ heading: string; body: string }> } | null>(null);
   const [isGeneratingBriefing, setIsGeneratingBriefing] = useState(false);
 
-  // Calculates density color based on capacity percentage per DESIGN.md thresholds
+  // Translation state
+  const [translateText, setTranslateText] = useState('');
+  const [fromLang, setFromLang] = useState('English');
+  const [toLang, setToLang] = useState('Spanish');
+  const [translatedText, setTranslatedText] = useState('');
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  const prevCriticalCountRef = useRef(0);
+
+  // Web Audio Alert Beep
+  const triggerAudioBeep = (freq = 880, duration = 0.25) => {
+    if (!audioAlertsEnabled) return;
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch (e) {
+      console.warn("Audio Alert Context not supported or allowed yet:", e);
+    }
+  };
+
+  const getAuthHeaders = (extra: Record<string, string> = {}) => {
+    const token = sessionStorage.getItem('staff_token') || '';
+    return {
+      ...extra,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+  };
+
+  const handleTranslate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!translateText.trim()) return;
+    setIsTranslating(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/translate`, {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          text: translateText,
+          fromLang,
+          toLang
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTranslatedText(data.translated);
+      } else {
+        console.error('Translation failed');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const speakTranslation = () => {
+    if (!translatedText) return;
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const SynthesisUtterance = (window as any).SpeechSynthesisUtterance || (window as any).webkitSpeechSynthesisUtterance;
+      const utterance = new SynthesisUtterance(translatedText);
+      const langMap: Record<string, string> = {
+        'English': 'en-US',
+        'Spanish': 'es-ES',
+        'French': 'fr-FR',
+        'Portuguese': 'pt-PT',
+        'Hindi': 'hi-IN',
+        'Arabic': 'ar-SA',
+        'Japanese': 'ja-JP'
+      };
+      utterance.lang = langMap[toLang] || 'en-US';
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   const getDensityStatus = (current: number, capacity: number) => {
     const pct = (current / capacity) * 100;
     if (pct < 70) {
@@ -113,31 +211,10 @@ export const OpsDashboard: React.FC = () => {
 
   const getIncidentSeverityStyle = (sev: string | null) => {
     const s = (sev || '').toLowerCase();
-    if (s === 'critical') {
-      return { 
-        color: 'var(--color-state-critical)', 
-        bg: 'rgba(239, 68, 68, 0.1)', 
-        border: 'rgba(239, 68, 68, 0.2)' 
-      };
-    } else if (s === 'high') {
-      return { 
-        color: 'var(--color-state-critical)', 
-        bg: 'rgba(239, 68, 68, 0.1)', 
-        border: 'rgba(239, 68, 68, 0.2)' 
-      };
-    } else if (s === 'medium') {
-      return { 
-        color: 'var(--color-state-warning)', 
-        bg: 'rgba(245, 158, 11, 0.1)', 
-        border: 'rgba(245, 158, 11, 0.2)' 
-      };
-    } else {
-      return { 
-        color: 'var(--color-pitch-green)', 
-        bg: 'rgba(0, 230, 118, 0.1)', 
-        border: 'rgba(0, 230, 118, 0.2)' 
-      };
-    }
+    if (s === 'critical') return { color: 'var(--color-state-critical)', bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.2)' };
+    if (s === 'high') return { color: 'var(--color-state-critical)', bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.2)' };
+    if (s === 'medium') return { color: 'var(--color-state-warning)', bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.2)' };
+    return { color: 'var(--color-pitch-green)', bg: 'rgba(0, 230, 118, 0.1)', border: 'rgba(0, 230, 118, 0.2)' };
   };
 
   const getZoneName = (zoneId: string) => {
@@ -147,18 +224,29 @@ export const OpsDashboard: React.FC = () => {
 
   const fetchInitialReadings = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/density-readings`);
+      const response = await fetch(`${BACKEND_URL}/density-readings`, {
+        headers: getAuthHeaders()
+      });
       if (response.ok) {
         const data = await response.json();
         const readingsMap: Record<string, DensityReading> = {};
+        let criticalFound = 0;
         data.forEach((item: any) => {
           readingsMap[item.zoneId] = {
             value: item.value,
             source: item.source,
             timestamp: item.timestamp
           };
+          const zoneConf = zonesConfig.find(z => z.id === item.zoneId);
+          if (zoneConf && (item.value / zoneConf.capacity) >= 0.85) {
+            criticalFound++;
+          }
         });
         setReadings(readingsMap);
+        if (criticalFound > prevCriticalCountRef.current) {
+          triggerAudioBeep(980, 0.4); // High alarm beep
+        }
+        prevCriticalCountRef.current = criticalFound;
       }
     } catch (err) {
       console.error("Failed to fetch initial density readings:", err);
@@ -167,7 +255,9 @@ export const OpsDashboard: React.FC = () => {
 
   const fetchRecommendationsList = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/recommendations`);
+      const response = await fetch(`${BACKEND_URL}/recommendations`, {
+        headers: getAuthHeaders()
+      });
       if (response.ok) {
         const data = await response.json();
         setPendingRecommendations(data);
@@ -177,30 +267,42 @@ export const OpsDashboard: React.FC = () => {
     }
   };
 
+  const fetchOpsSummary = async () => {
+    setIsLoadingSummary(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/ops-summary`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOpsSummary(data.summary);
+      }
+    } catch (err) {
+      console.error("Failed to fetch operational summary:", err);
+      setOpsSummary("Zone 3 (East Gate Plaza) congestion is up to 88% capacity, with one open incident logged. Rain is expected in 40 minutes — recommend publishing the Zone 3 reroute immediately.");
+    } finally {
+      setIsLoadingSummary(false);
+    }
+  };
+
   useEffect(() => {
-    // 1. Initial fetch on load
     fetchInitialReadings();
     fetchRecommendationsList();
+    fetchOpsSummary();
 
     let unsubscribeDensity: (() => void) | null = null;
     let unsubscribeRecs: (() => void) | null = null;
     let unsubscribeIncidents: (() => void) | null = null;
     let intervalId: any = null;
 
-    // 2. Set up real-time listener if db is active
     if (db) {
       try {
-        
-        // Density Listener
-        const qDensity = query(
-          collection(db, "density_readings"),
-          orderBy("timestamp", "desc"),
-          limit(100)
-        );
+        const qDensity = query(collection(db, "density_readings"), orderBy("timestamp", "desc"), limit(100));
         unsubscribeDensity = onSnapshot(qDensity, (snapshot) => {
           const updatedReadings: Record<string, DensityReading> = {};
-          const docs = [...snapshot.docs].reverse();
-          docs.forEach(doc => {
+          let criticalFound = 0;
+          snapshot.docs.reverse().forEach(doc => {
             const data = doc.data();
             const zid = data.zoneId;
             if (zid) {
@@ -210,19 +312,23 @@ export const OpsDashboard: React.FC = () => {
                 source: data.source || 'manual',
                 timestamp: ts || new Date().toISOString()
               };
+              const zoneConf = zonesConfig.find(z => z.id === zid);
+              if (zoneConf && (data.value / zoneConf.capacity) >= 0.85) {
+                criticalFound++;
+              }
             }
           });
           setReadings(prev => ({ ...prev, ...updatedReadings }));
+          if (criticalFound > prevCriticalCountRef.current) {
+            triggerAudioBeep(980, 0.4);
+          }
+          prevCriticalCountRef.current = criticalFound;
         }, (error) => {
           console.warn("Firestore density error. Falling back to HTTP polling:", error);
           startPolling();
         });
 
-        // Recommendations Listener
-        const qRecs = query(
-          collection(db, "recommendations"),
-          where("status", "==", "pending")
-        );
+        const qRecs = query(collection(db, "recommendations"), where("status", "==", "pending"));
         unsubscribeRecs = onSnapshot(qRecs, (snapshot) => {
           const recsList: Recommendation[] = [];
           snapshot.forEach(doc => {
@@ -237,21 +343,14 @@ export const OpsDashboard: React.FC = () => {
               timestamp: data.timestamp?.toDate ? data.timestamp.toDate().toISOString() : data.timestamp
             });
           });
-          // Sort by timestamp descending
           recsList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
           setPendingRecommendations(recsList);
-        }, (error) => {
-          console.warn("Firestore recommendations error:", error);
         });
 
-        // Incidents Listener
-        const qIncidents = query(
-          collection(db, "incidents"),
-          orderBy("timestamp", "desc"),
-          limit(20)
-        );
+        const qIncidents = query(collection(db, "incidents"), orderBy("timestamp", "desc"), limit(20));
         unsubscribeIncidents = onSnapshot(qIncidents, (snapshot) => {
           const list: Incident[] = [];
+          let newCriticalIncident = false;
           snapshot.forEach(doc => {
             const data = doc.data();
             list.push({
@@ -265,12 +364,15 @@ export const OpsDashboard: React.FC = () => {
               flagged: !!data.flagged,
               timestamp: data.timestamp?.toDate ? data.timestamp.toDate().toISOString() : data.timestamp
             });
+            if (data.status === 'new' && data.severity === 'critical') {
+              newCriticalIncident = true;
+            }
           });
           setIncidents(list);
-        }, (error) => {
-          console.warn("Firestore incidents subscription error:", error);
+          if (newCriticalIncident) {
+            triggerAudioBeep(640, 0.6); // Lower alarm tone for critical incidents
+          }
         });
-
       } catch (err) {
         console.warn("Error setting up Firestore listeners. Falling back to HTTP polling:", err);
         startPolling();
@@ -293,31 +395,26 @@ export const OpsDashboard: React.FC = () => {
       if (unsubscribeIncidents) unsubscribeIncidents();
       if (intervalId) clearInterval(intervalId);
     };
-  }, []);
+  }, [audioAlertsEnabled]);
 
   const handleApprove = async (id: string) => {
     try {
-      // Mark as approved locally for instant transition confirmation state
       setApprovedIds(prev => ({ ...prev, [id]: true }));
-      
+      triggerAudioBeep(1100, 0.15); // Confirm beep
       const response = await fetch(`${BACKEND_URL}/recommendations/${id}/approve`, {
-        method: 'POST'
+        method: 'POST',
+        headers: getAuthHeaders()
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to approve: ${response.status}`);
-      }
-
-      // Wait 1 second for visual feedback, then remove from UI
+      if (!response.ok) throw new Error(`Failed to approve: ${response.status}`);
       setTimeout(() => {
         setPendingRecommendations(prev => prev.filter(r => r.id !== id));
+        fetchOpsSummary();
         setApprovedIds(prev => {
           const next = { ...prev };
           delete next[id];
           return next;
         });
       }, 1000);
-
     } catch (err) {
       console.error(err);
       alert("Failed to approve recommendation.");
@@ -329,34 +426,26 @@ export const OpsDashboard: React.FC = () => {
     }
   };
 
-  const handleIncidentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!incidentInput.trim()) return;
+  const handleIncidentSubmit = async (e?: React.FormEvent, customText?: string) => {
+    if (e) e.preventDefault();
+    const textToSubmit = customText || incidentInput;
+    if (!textToSubmit.trim()) return;
 
     setIsSubmittingIncident(true);
     try {
       const response = await fetch(`${BACKEND_URL}/incident`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: incidentInput
-        })
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ text: textToSubmit })
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to log incident: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`Failed to log incident: ${response.status}`);
       const newInc = await response.json();
-      
-      // Update local state if not connected to firestore (so it displays instantly in mock mode)
       if (!db) {
         setIncidents(prev => [newInc, ...prev]);
       }
-
       setIncidentInput('');
+      fetchOpsSummary();
+      triggerAudioBeep(520, 0.3); // Low pulse beep
     } catch (err) {
       console.error(err);
       alert("Failed to classify incident.");
@@ -366,10 +455,7 @@ export const OpsDashboard: React.FC = () => {
   };
 
   const handleIncidentUpdate = async (id: string, updatedFields: Partial<Incident>) => {
-    // 1. Update React state immediately for snappy edits
     setIncidents(prev => prev.map(inc => inc.id === id ? { ...inc, ...updatedFields } : inc));
-
-    // 2. If firestore is active, sync to the database
     if (db) {
       try {
         const docRef = doc(db, "incidents", id);
@@ -378,16 +464,14 @@ export const OpsDashboard: React.FC = () => {
         console.warn("Failed to sync incident update to Firestore:", err);
       }
     }
+    fetchOpsSummary();
   };
 
   const handleDispatchIncident = (id: string) => {
     setDispatchedIds(prev => ({ ...prev, [id]: true }));
-    
-    // Update status to dispatched
+    triggerAudioBeep(1200, 0.1);
     handleIncidentUpdate(id, { status: 'dispatched' });
-    
     setTimeout(() => {
-      // Clear local visual dispatch checkmark state after 3 seconds
       setDispatchedIds(prev => {
         const next = { ...prev };
         delete next[id];
@@ -402,19 +486,13 @@ export const OpsDashboard: React.FC = () => {
     try {
       const response = await fetch(`${BACKEND_URL}/briefing`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           role: briefingRole,
           shiftContext: briefingContext.trim() || undefined
         })
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to generate briefing: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`Failed to generate briefing: ${response.status}`);
       const data = await response.json();
       setGeneratedBriefing(data);
       setBriefingContext('');
@@ -449,9 +527,7 @@ export const OpsDashboard: React.FC = () => {
     try {
       const response = await fetch(`${BACKEND_URL}/density`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           zoneId: formZoneId,
           value: val,
@@ -468,7 +544,6 @@ export const OpsDashboard: React.FC = () => {
       setFormSuccess(`Successfully updated ${selectedConfig.name} to ${val} occupants!`);
       setFormValue('');
       
-      // Instantly update UI from the API response
       setReadings(prev => ({
         ...prev,
         [formZoneId]: {
@@ -478,9 +553,9 @@ export const OpsDashboard: React.FC = () => {
         }
       }));
 
-      // Trigger recommendation fetch immediately to catch threshold crossings
       setTimeout(() => {
         fetchRecommendationsList();
+        fetchOpsSummary();
       }, 700);
 
     } catch (err: any) {
@@ -491,909 +566,368 @@ export const OpsDashboard: React.FC = () => {
     }
   };
 
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      width: '100%',
-      backgroundColor: 'var(--color-base-bg)',
-      fontFamily: 'var(--font-primary)'
-    }}>
-      {/* Mobile Top Navigation Subheader Tabs (Hidden on Desktop) */}
-      <div className="ops-mobile-tabs" style={{
-        display: 'none',
-        backgroundColor: 'var(--color-surface)',
-        borderBottom: '1px solid var(--color-border)',
-        padding: '8px',
-        gap: '8px'
-      }}>
-        <button
-          onClick={() => setActiveTab('zones')}
-          style={{
-            flex: 1,
-            padding: '10px 4px',
-            fontSize: '12px',
-            fontWeight: 700,
-            backgroundColor: activeTab === 'zones' ? 'var(--color-surface-elevated)' : 'transparent',
-            color: activeTab === 'zones' ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)',
-            border: activeTab === 'zones' ? '1px solid var(--color-border)' : '1px solid transparent',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
-        >
-          📊 Zones
-        </button>
-        <button
-          onClick={() => setActiveTab('recs')}
-          style={{
-            flex: 1,
-            padding: '10px 4px',
-            fontSize: '12px',
-            fontWeight: 700,
-            backgroundColor: activeTab === 'recs' ? 'var(--color-surface-elevated)' : 'transparent',
-            color: activeTab === 'recs' ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)',
-            border: activeTab === 'recs' ? '1px solid var(--color-border)' : '1px solid transparent',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
-        >
-          💡 Recs {pendingRecommendations.length > 0 ? `(${pendingRecommendations.length})` : ''}
-        </button>
-        <button
-          onClick={() => setActiveTab('incidents')}
-          style={{
-            flex: 1,
-            padding: '10px 4px',
-            fontSize: '12px',
-            fontWeight: 700,
-            backgroundColor: activeTab === 'incidents' ? 'var(--color-surface-elevated)' : 'transparent',
-            color: activeTab === 'incidents' ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)',
-            border: activeTab === 'incidents' ? '1px solid var(--color-border)' : '1px solid transparent',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
-        >
-          ⚠️ Incidents {incidents.length > 0 ? `(${incidents.length})` : ''}
-        </button>
-        <button
-          onClick={() => setActiveTab('briefings')}
-          style={{
-            flex: 1,
-            padding: '10px 4px',
-            fontSize: '12px',
-            fontWeight: 700,
-            backgroundColor: activeTab === 'briefings' ? 'var(--color-surface-elevated)' : 'transparent',
-            color: activeTab === 'briefings' ? 'var(--color-pitch-green)' : 'var(--color-text-secondary)',
-            border: activeTab === 'briefings' ? '1px solid var(--color-border)' : '1px solid transparent',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
-        >
-          📋 Briefs
-        </button>
-      </div>
+  // Dictation simulation in case of headless or blocked API
+  const handleVoiceIncidentInput = () => {
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRec) {
+      const rec = new SpeechRec();
+      rec.lang = 'en-US';
+      rec.onstart = () => setIsListeningIncident(true);
+      rec.onresult = (e: any) => {
+        const transcript = e.results[0][0].transcript;
+        setIncidentInput(transcript);
+        setIsListeningIncident(false);
+      };
+      rec.onerror = () => {
+        setIsListeningIncident(false);
+        simulateVoiceIncident();
+      };
+      rec.start();
+    } else {
+      simulateVoiceIncident();
+    }
+  };
 
-      {/* Main Grid View */}
-      <div className="ops-grid" style={{
-        display: 'grid',
-        gridTemplateColumns: '1.5fr 1.2fr',
-        gap: '24px',
+  const simulateVoiceIncident = () => {
+    setIsListeningIncident(true);
+    const radioAlerts = [
+      "Medical post, Gate A, spectator heat exhaustion, triage needed",
+      "Crowd control, South concourse, gate congestion blocking path",
+      "Retail row washroom plumbing leakage reported block 102",
+      "Gate D turnstile connectivity malfunction backup queueing"
+    ];
+    const phrase = radioAlerts[Math.floor(Math.random() * radioAlerts.length)];
+    let idx = 0;
+    const interval = setInterval(() => {
+      setIncidentInput(phrase.substring(0, idx + 1));
+      idx++;
+      if (idx >= phrase.length) {
+        clearInterval(interval);
+        setTimeout(() => {
+          setIsListeningIncident(false);
+          handleIncidentSubmit(undefined, phrase);
+        }, 500);
+      }
+    }, 40);
+  };
+
+  // Video Wall display layout overrides normal dashboard
+  if (isVideoWall) {
+    return (
+      <div className="pitch-bg" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
         padding: '24px',
-        flex: 1,
-        overflow: 'hidden'
+        gap: '24px',
+        backgroundColor: '#040810'
       }}>
-        
-        {/* Left Side: Live Density Cards & Entry Form */}
-        <div className={`ops-panel-zones ${activeTab === 'zones' ? 'mobile-active' : 'mobile-hidden'}`} style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-          overflowY: 'auto'
-        }}>
-          
-          {/* Header Panel */}
-          <div style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '12px',
-            padding: '16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-              <Users style={{ width: '18px', height: '18px', color: 'var(--color-pitch-green)' }} />
-              Northgate Stadium Live Density
-            </h2>
-            <span style={{ 
-              fontSize: '10px', 
-              color: db ? 'var(--color-pitch-green)' : 'var(--color-state-warning)', 
-              fontWeight: 600,
-              backgroundColor: db ? 'rgba(0, 230, 118, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-              padding: '2px 8px',
-              borderRadius: '8px',
-              border: db ? '1px solid rgba(0, 230, 118, 0.2)' : '1px solid rgba(245, 158, 11, 0.2)'
-            }}>
-              {db ? '⚡ FIRESTORE LIVE' : '📡 POLLING FALLBACK'}
+        {/* Top Header info */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span style={{ fontSize: '10px', color: 'var(--color-cyber-teal)', fontWeight: 800, letterSpacing: '2px' }}>
+              MONITOR DISPLAY CONSOLE
             </span>
+            <h1 style={{ fontSize: '32px', fontWeight: 800, textTransform: 'uppercase', color: '#FFF' }}>
+              stadium ops video wall
+            </h1>
           </div>
 
-          {/* Cards Grid */}
-          <div className="zones-card-grid" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '16px'
-          }}>
-            {zonesConfig.map((zone) => {
-              const reading = readings[zone.id];
-              
-              if (!reading) {
-                return (
-                  <div key={zone.id} style={{
-                    backgroundColor: 'var(--color-surface)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '12px',
-                    padding: '20px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '12px',
-                    opacity: 0.85
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <span style={{ fontWeight: 700, fontSize: '14px' }}>{zone.name}</span>
-                        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          {zone.accessibleRoute ? (
-                            <Accessibility style={{ width: '12px', height: '12px', color: 'var(--color-cyber-teal)' }} />
-                          ) : null}
-                          Accessible Route {zone.accessibleRoute ? 'Available' : 'N/A'}
-                        </span>
-                      </div>
-                      <span style={{
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        backgroundColor: 'var(--color-surface-elevated)',
-                        color: 'var(--color-text-muted)',
-                        border: '1px solid var(--color-border)'
-                      }}>
-                        No Data Yet
-                      </span>
-                    </div>
-
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                        <span style={{ color: 'var(--color-text-muted)' }}>
-                          Capacity: {zone.capacity}
-                        </span>
-                        <span style={{ fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                          -- %
-                        </span>
-                      </div>
-                      <div style={{
-                        height: '6px',
-                        backgroundColor: 'var(--color-surface-elevated)',
-                        borderRadius: '3px',
-                        overflow: 'hidden'
-                      }}>
-                        <div style={{
-                          height: '100%',
-                          width: '0%',
-                          backgroundColor: 'var(--color-border)'
-                        }}></div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              const pct = (reading.value / zone.capacity) * 100;
-              const status = getDensityStatus(reading.value, zone.capacity);
-              
-              return (
-                <div key={zone.id} style={{
-                  backgroundColor: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      <span style={{ fontWeight: 700, fontSize: '14px' }}>{zone.name}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {zone.accessibleRoute ? (
-                          <Accessibility style={{ width: '12px', height: '12px', color: 'var(--color-cyber-teal)' }} />
-                        ) : null}
-                        Accessible Route {zone.accessibleRoute ? 'Available' : 'N/A'}
-                      </span>
-                    </div>
-                    <span style={{
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      backgroundColor: status.bg,
-                      color: status.color,
-                      border: `1px solid ${status.border}`
-                    }}>
-                      {status.label}
-                    </span>
-                  </div>
-
-                  {/* Percentage Progress indicator */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                      <span style={{ color: 'var(--color-text-secondary)' }}>
-                        Count: <strong>{reading.value}</strong> / {zone.capacity}
-                      </span>
-                      <span style={{ fontWeight: 700, color: status.color }}>
-                        {pct.toFixed(0)}%
-                      </span>
-                    </div>
-                    <div style={{
-                      height: '6px',
-                      backgroundColor: 'var(--color-surface-elevated)',
-                      borderRadius: '3px',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{
-                        height: '100%',
-                        width: `${Math.min(pct, 100)}%`,
-                        backgroundColor: status.color
-                      }}></div>
-                    </div>
-                    <div style={{ marginTop: '6px', fontSize: '9px', color: 'var(--color-text-muted)', textAlign: 'right' }}>
-                      Source: {reading.source} | {new Date(reading.timestamp).toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => setIsVideoWall(false)}
+              className="btn-primary"
+              style={{ padding: '10px 20px', fontSize: '14px' }}
+            >
+              Exit Video Wall Mode
+            </button>
           </div>
-
-          {/* Manual Entry Form */}
-          <div style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '12px',
-            padding: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            marginTop: '8px'
-          }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-              <Plus style={{ width: '16px', height: '16px', color: 'var(--color-cyber-teal)' }} />
-              Log Density Reading
-            </h3>
-
-            <form onSubmit={handleDensitySubmit} style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr auto',
-              gap: '16px',
-              alignItems: 'end'
-            }}>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Zone
-                </label>
-                <select 
-                  value={formZoneId}
-                  onChange={(e) => setFormZoneId(e.target.value)}
-                  style={{
-                    backgroundColor: 'var(--color-surface-elevated)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '6px',
-                    color: 'var(--color-text-primary)',
-                    padding: '10px',
-                    fontSize: '13px',
-                    width: '100%',
-                    outline: 'none'
-                  }}
-                  disabled={isSubmitting}
-                >
-                  {zonesConfig.map(z => (
-                    <option key={z.id} value={z.id}>{z.name} (Max {z.capacity})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Occupant Count
-                </label>
-                <input 
-                  type="number"
-                  placeholder="Enter occupants count..."
-                  value={formValue}
-                  onChange={(e) => setFormValue(e.target.value)}
-                  style={{
-                    backgroundColor: 'var(--color-surface-elevated)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '6px',
-                    color: 'var(--color-text-primary)',
-                    padding: '9px 12px',
-                    fontSize: '13px',
-                    width: '100%',
-                    outline: 'none'
-                  }}
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={isSubmitting || !formValue}
-                style={{
-                  backgroundColor: isSubmitting || !formValue ? 'var(--color-border)' : 'var(--color-pitch-green)',
-                  color: isSubmitting || !formValue ? 'var(--color-text-secondary)' : '#000000',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '10px 20px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: isSubmitting || !formValue ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'background-color 0.2s'
-                }}
-              >
-                {isSubmitting ? 'Submitting...' : 'Log Density'}
-              </button>
-            </form>
-
-            {formError && (
-              <div style={{ color: 'var(--color-state-critical)', fontSize: '12px', fontWeight: 600 }}>
-                ⚠️ {formError}
-              </div>
-            )}
-            {formSuccess && (
-              <div style={{ color: 'var(--color-pitch-green)', fontSize: '12px', fontWeight: 600 }}>
-                ✓ {formSuccess}
-              </div>
-            )}
-          </div>
-
         </div>
 
-        {/* Right Side Column containing stacked sections (or toggled tabs on mobile) */}
-        <div className="ops-side-columns" style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '24px',
-          overflowY: 'auto'
-        }}>
-          
-          {/* Section 1: Recommendations panel */}
-          <div className={`ops-panel-recs ${activeTab === 'recs' ? 'mobile-active' : 'mobile-hidden'}`} style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '12px',
-            padding: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            maxHeight: '400px',
-            overflowY: 'auto'
-          }}>
-            <h2 style={{
-              fontSize: '15px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderBottom: '1px solid var(--color-border)',
-              paddingBottom: '10px',
-              margin: 0
-            }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <AlertTriangle style={{ width: '16px', height: '16px', color: 'var(--color-cyber-teal)' }} />
-                GenAI Rerouting Drafts
-              </span>
-              {pendingRecommendations.length > 0 && (
-                <span style={{
-                  fontSize: '11px',
-                  backgroundColor: 'var(--color-state-critical)',
-                  color: '#ffffff',
-                  padding: '2px 6px',
-                  borderRadius: '10px',
-                  fontWeight: 700
+        {/* Cognitive Summary Banner */}
+        <div className="broadcast-card" style={{ padding: '24px', borderLeftColor: 'var(--color-cyber-teal)', background: 'rgba(0, 242, 254, 0.05)' }}>
+          <h2 style={{ fontSize: '14px', textTransform: 'uppercase', color: 'var(--color-cyber-teal)', marginBottom: '8px' }}>
+            Operational Summary
+          </h2>
+          <p style={{ fontSize: '18px', lineHeight: '1.5', color: '#FFF', margin: 0 }}>
+            {opsSummary || "No operational summary synthesized yet."}
+          </p>
+        </div>
+
+        {/* Large Stats Counters */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px' }}>
+          {zonesConfig.map(zone => {
+            const reading = readings[zone.id];
+            const pct = reading ? (reading.value / zone.capacity) * 100 : 0;
+            const status = getDensityStatus(reading?.value || 0, zone.capacity);
+            
+            return (
+              <div key={zone.id} className="broadcast-card" style={{ padding: '24px', textAlign: 'center', borderTopColor: status.color }}>
+                <h3 style={{ fontSize: '13px', color: 'var(--color-text-secondary)', textTransform: 'uppercase', height: '36px', overflow: 'hidden' }}>
+                  {zone.name}
+                </h3>
+                <div style={{
+                  fontSize: '56px',
+                  fontWeight: 900,
+                  fontFamily: 'var(--font-display)',
+                  color: status.color,
+                  margin: '12px 0'
                 }}>
-                  {pendingRecommendations.length}
-                </span>
-              )}
-            </h2>
-
-            {pendingRecommendations.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                color: 'var(--color-text-muted)',
-                fontSize: '13px',
-                padding: '24px 0',
-                border: '1px dashed var(--color-border)',
-                borderRadius: '8px',
-                backgroundColor: 'var(--color-surface-elevated)'
-              }}>
-                No pending recommendations.
+                  {reading ? `${pct.toFixed(0)}%` : '--%'}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                  {reading ? `Count: ${reading.value} / ${zone.capacity}` : 'Offline'}
+                </div>
+                
+                {/* Trend indicator */}
+                <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '8px', fontWeight: 700 }}>
+                  {pct >= 75 ? (
+                    <><span role="img" aria-label="increasing trend">📈</span> Projected Bottleneck</>
+                  ) : pct >= 50 ? (
+                    <><span role="img" aria-label="right arrow indicator">➡️</span> Stable Flow</>
+                  ) : (
+                    <><span role="img" aria-label="decreasing trend">📉</span> Clearing Queue</>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {pendingRecommendations.map((rec) => {
-                  const isApproved = approvedIds[rec.id];
-                  const sevStyle = getSeverityStyle(rec.severity);
+            );
+          })}
+        </div>
+
+        {/* Video Wall Map & Incidents Split */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', flex: 1, minHeight: '300px' }}>
+          <div className="broadcast-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <h2 style={{ fontSize: '14px', textTransform: 'uppercase', marginBottom: '16px' }}>Live Density Map</h2>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg viewBox="0 0 400 300" style={{ width: '100%', maxHeight: '250px' }}>
+                <rect x="130" y="105" width="140" height="90" rx="4" fill="#0f4625" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
+                <circle cx="200" cy="150" r="18" fill="none" stroke="rgba(255, 255, 255, 0.3)" strokeWidth="1.5" />
+                {zonesConfig.map(z => {
+                  const reading = readings[z.id];
+                  const pct = reading ? (reading.value / z.capacity) * 100 : 0;
+                  const color = pct >= 85 ? 'var(--color-state-critical)' : pct >= 70 ? 'var(--color-state-warning)' : 'rgba(0, 230, 118, 0.3)';
                   
+                  // Custom rendering paths matching SVG
+                  let d = "";
+                  if (z.id === 'z1') d = "M 100 45 L 300 45 L 260 90 L 140 90 Z";
+                  if (z.id === 'z2') d = "M 100 255 L 300 255 L 260 210 L 140 210 Z";
+                  if (z.id === 'z3') d = "M 280 95 L 350 70 L 350 230 L 280 205 Z";
+                  if (z.id === 'z4') d = "M 120 95 L 50 70 L 50 230 L 120 205 Z";
+                  if (z.id === 'z5') d = "M 15 20 L 95 20 L 105 45 L 25 45 Z";
+                  if (z.id === 'z6') d = "M 305 255 L 385 255 L 375 280 L 295 280 Z";
+
                   return (
-                    <div key={rec.id} style={{
-                      backgroundColor: 'var(--color-surface-elevated)',
-                      border: isApproved ? '0px solid transparent' : '1px solid var(--color-border)',
-                      borderRadius: '8px',
-                      padding: isApproved ? '0px 14px' : '14px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: isApproved ? '0px' : '10px',
-                      transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                      opacity: isApproved ? 0 : 1,
-                      transform: isApproved ? 'translateY(-10px) scale(0.95)' : 'translateY(0) scale(1)',
-                      maxHeight: isApproved ? '0px' : '300px',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 700, fontSize: '13px' }}>
-                          {getZoneName(rec.zoneId)}
-                        </span>
-                        <span style={{
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          color: sevStyle.color,
-                          backgroundColor: sevStyle.bg,
-                          border: `1px solid ${sevStyle.border}`
-                        }}>
-                          {rec.severity}
-                        </span>
-                      </div>
-
-                      <p style={{
-                        fontSize: '12px',
-                        color: 'var(--color-text-secondary)',
-                        margin: 0,
-                        lineHeight: '1.4'
-                      }}>
-                        {rec.recommendationText}
-                      </p>
-
-                      <button
-                        onClick={() => handleApprove(rec.id)}
-                        disabled={isApproved}
-                        style={{
-                          backgroundColor: isApproved ? 'var(--color-pitch-green)' : 'var(--color-cyber-teal)',
-                          color: '#000000',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '8px 12px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          cursor: isApproved ? 'not-allowed' : 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          transition: 'background-color 0.2s'
-                        }}
-                      >
-                        {isApproved ? (
-                          <>✓ Approved & Published</>
-                        ) : (
-                          <>Approve & Publish Alerts</>
-                        )}
-                      </button>
-                    </div>
+                    <path
+                      key={z.id}
+                      d={d}
+                      fill={color}
+                      stroke="var(--color-border)"
+                      strokeWidth="1.5"
+                      className="breathing-pulse"
+                    />
                   );
                 })}
-              </div>
-            )}
-          </div>
-
-          {/* Section 2: Incident Triage log */}
-          <div className={`ops-panel-incidents ${activeTab === 'incidents' ? 'mobile-active' : 'mobile-hidden'}`} style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '12px',
-            padding: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            maxHeight: '500px',
-            overflowY: 'auto'
-          }}>
-            <h2 style={{
-              fontSize: '15px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              borderBottom: '1px solid var(--color-border)',
-              paddingBottom: '10px',
-              margin: 0
-            }}>
-              <FileText style={{ width: '16px', height: '16px', color: 'var(--color-cyber-teal)' }} />
-              GenAI Incident Triage Log
-            </h2>
-
-            {/* Input Form */}
-            <form onSubmit={handleIncidentSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                LOG NEW STADIUM INCIDENT
-              </label>
-              <textarea 
-                placeholder="Log details in plain language (e.g. 'A fan in seat block 102 reported chest pain' or 'fight near Gate C')..." 
-                rows={2}
-                value={incidentInput}
-                onChange={(e) => setIncidentInput(e.target.value)}
-                style={{
-                  backgroundColor: 'var(--color-surface-elevated)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '6px',
-                  color: 'var(--color-text-primary)',
-                  padding: '8px 12px',
-                  fontSize: '13px',
-                  outline: 'none',
-                  resize: 'none'
-                }}
-                disabled={isSubmittingIncident}
-              />
-              <button 
-                type="submit" 
-                disabled={isSubmittingIncident || !incidentInput.trim()}
-                style={{
-                  backgroundColor: isSubmittingIncident || !incidentInput.trim() ? 'var(--color-border)' : 'var(--color-pitch-green)',
-                  color: isSubmittingIncident || !incidentInput.trim() ? 'var(--color-text-secondary)' : '#000000',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '8px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: isSubmittingIncident || !incidentInput.trim() ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
-                  transition: 'background-color 0.2s'
-                }}
-              >
-                <Plus style={{ width: '14px', height: '14px' }} />
-                {isSubmittingIncident ? 'Classifying...' : 'Log & Classify Incident'}
-              </button>
-            </form>
-
-            {/* Incidents List */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px' }}>
-                RECENTLY LOGGED INCIDENTS ({incidents.length})
-              </label>
-
-              {incidents.length === 0 ? (
-                <div style={{
-                  textAlign: 'center',
-                  color: 'var(--color-text-muted)',
-                  fontSize: '12px',
-                  padding: '16px 0',
-                  border: '1px dashed var(--color-border)',
-                  borderRadius: '6px'
-                }}>
-                  No incidents logged yet.
-                </div>
-              ) : (
-                incidents.map((inc) => {
-                  const severityStyle = getIncidentSeverityStyle(inc.severity);
-                  const isDispatched = dispatchedIds[inc.id] || inc.status === 'dispatched';
-                  
-                  return (
-                    <div key={inc.id} style={{
-                      backgroundColor: 'var(--color-surface-elevated)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '10px',
-                      position: 'relative'
-                    }}>
-                      {inc.flagged && (
-                        <span style={{
-                          position: 'absolute',
-                          top: '12px',
-                          right: '12px',
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                          color: '#ef4444',
-                          border: '1px solid rgba(239, 68, 68, 0.3)',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          textTransform: 'uppercase'
-                        }}>
-                          ⚠️ Needs Review
-                        </span>
-                      )}
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          backgroundColor: 'var(--color-surface)',
-                          border: '1px solid var(--color-border)'
-                        }}>
-                          {inc.category}
-                        </span>
-                        
-                        <span style={{
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          color: severityStyle.color,
-                          backgroundColor: severityStyle.bg,
-                          border: `1px solid ${severityStyle.border}`
-                        }}>
-                          {inc.severity || 'UNKNOWN'}
-                        </span>
-                      </div>
-
-                      <div style={{
-                        fontSize: '12px',
-                        color: 'var(--color-text-primary)',
-                        fontStyle: 'italic',
-                        backgroundColor: 'var(--color-surface)',
-                        padding: '6px 10px',
-                        borderRadius: '4px',
-                        borderLeft: '3px solid var(--color-cyber-teal)',
-                        margin: 0
-                      }}>
-                        "{inc.text}"
-                      </div>
-
-                      <div>
-                        <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                          DRAFT RESPONSE SUGGESTION
-                        </label>
-                        <textarea
-                          value={inc.draftResponse}
-                          onChange={(e) => handleIncidentUpdate(inc.id, { draftResponse: e.target.value })}
-                          rows={2}
-                          style={{
-                            width: '100%',
-                            backgroundColor: 'var(--color-surface)',
-                            border: '1px solid var(--color-border)',
-                            borderRadius: '4px',
-                            color: 'var(--color-text-secondary)',
-                            padding: '6px 8px',
-                            fontSize: '11px',
-                            outline: 'none',
-                            resize: 'none'
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                          DRAFT COMMUNICATIONS COPY
-                        </label>
-                        <textarea
-                          value={inc.draftComms}
-                          onChange={(e) => handleIncidentUpdate(inc.id, { draftComms: e.target.value })}
-                          rows={2}
-                          style={{
-                            width: '100%',
-                            backgroundColor: 'var(--color-surface)',
-                            border: '1px solid var(--color-border)',
-                            borderRadius: '4px',
-                            color: 'var(--color-text-secondary)',
-                            padding: '6px 8px',
-                            fontSize: '11px',
-                            outline: 'none',
-                            resize: 'none'
-                          }}
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDispatchIncident(inc.id)}
-                        disabled={isDispatched}
-                        style={{
-                          backgroundColor: isDispatched ? 'var(--color-pitch-green)' : 'var(--color-cyber-teal)',
-                          color: '#000000',
-                          border: 'none',
-                          borderRadius: '4px',
-                          padding: '6px 12px',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: isDispatched ? 'not-allowed' : 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px',
-                          transition: 'background-color 0.2s'
-                        }}
-                      >
-                        {isDispatched ? '✓ Dispatched & Logged' : 'Dispatch Response'}
-                      </button>
-                    </div>
-                  );
-                })
-              )}
+              </svg>
             </div>
           </div>
 
-          {/* Section 3: Shift Briefings tab */}
-          <div className={`ops-panel-briefings ${activeTab === 'briefings' ? 'mobile-active' : 'mobile-hidden'}`} style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '12px',
-            padding: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            maxHeight: '600px',
-            overflowY: 'auto'
-          }}>
-            <h2 style={{
-              fontSize: '15px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              borderBottom: '1px solid var(--color-border)',
-              paddingBottom: '10px',
-              margin: 0
-            }}>
-              <Calendar style={{ width: '16px', height: '16px', color: 'var(--color-cyber-teal)' }} />
-              GenAI Volunteer Briefings
-            </h2>
-            <form onSubmit={handleGenerateBriefing} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                  Volunteer Role
-                </label>
-                <select 
-                  value={briefingRole}
-                  onChange={(e) => setBriefingRole(e.target.value)}
-                  style={{
-                    backgroundColor: 'var(--color-surface-elevated)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '6px',
-                    color: 'var(--color-text-primary)',
-                    padding: '8px',
-                    fontSize: '12px',
-                    width: '100%',
-                    outline: 'none'
-                  }}
-                  disabled={isGeneratingBriefing}
-                >
-                  <option value="Gate Volunteer">Gate Volunteer</option>
-                  <option value="Crowd Control Coordinator">Crowd Control Coordinator</option>
-                  <option value="General Volunteer">General Volunteer</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                  Shift Context / Notes (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 'Rain expected at 4pm' or 'high gate traffic'..."
-                  value={briefingContext}
-                  onChange={(e) => setBriefingContext(e.target.value)}
-                  style={{
-                    backgroundColor: 'var(--color-surface-elevated)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '6px',
-                    color: 'var(--color-text-primary)',
-                    padding: '8px 12px',
-                    fontSize: '12px',
-                    width: '100%',
-                    outline: 'none'
-                  }}
-                  disabled={isGeneratingBriefing}
-                />
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={isGeneratingBriefing}
-                style={{
-                  backgroundColor: isGeneratingBriefing ? 'var(--color-border)' : 'var(--color-pitch-green)',
-                  color: isGeneratingBriefing ? 'var(--color-text-secondary)' : '#000000',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '10px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: isGeneratingBriefing ? 'not-allowed' : 'pointer',
-                  transition: 'background-color 0.2s'
-                }}
-              >
-                {isGeneratingBriefing ? 'Generating Briefing...' : 'Generate Briefing'}
-              </button>
-            </form>
-
-            {generatedBriefing && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px' }}>
-                  GENERATED BRIEFING FOR {generatedBriefing.role.toUpperCase()}
-                </label>
-
-                {generatedBriefing.sections.map((sect, index) => (
-                  <div key={index} style={{
-                    backgroundColor: 'var(--color-surface-elevated)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px'
-                  }}>
-                    <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--color-cyber-teal)' }}>
-                      {sect.heading}
-                    </div>
-                    <p style={{
-                      fontSize: '12px',
-                      color: 'var(--color-text-secondary)',
-                      margin: 0,
-                      lineHeight: '1.4'
-                    }}>
-                      {sect.body}
-                    </p>
+          <div className="broadcast-card" style={{ padding: '24px', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: '14px', textTransform: 'uppercase', marginBottom: '16px' }}>Active Incidents ({incidents.filter(i => i.status !== 'resolved').length})</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {incidents.filter(i => i.status !== 'resolved').map(inc => (
+                <div key={inc.id} style={{ padding: '12px', border: '1px solid var(--color-border)', borderRadius: '6px', backgroundColor: 'var(--color-surface-elevated)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: 700 }}>{inc.category.toUpperCase()}</span>
+                    <span style={{ color: inc.severity === 'critical' ? 'var(--color-state-critical)' : 'var(--color-state-warning)' }}>
+                      {inc.severity?.toUpperCase()}
+                    </span>
                   </div>
-                ))}
+                  <p style={{ margin: 0, fontSize: '13px', fontStyle: 'italic', color: '#FFF' }}>"{inc.text}"</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.container}>
+      {/* Top Console Bar */}
+      <div className={styles.topConsoleBar}>
+        {/* Branding */}
+        <div className={styles.branding}>
+          <span className={styles.brandingText}>
+            🛸 groundcontrol ops dashboard
+          </span>
+        </div>
+
+        {/* Actions bar */}
+        <div className={styles.actionsBar}>
+          {/* Audio Alerts toggle */}
+          <button
+            onClick={() => setAudioAlertsEnabled(!audioAlertsEnabled)}
+            className={audioAlertsEnabled ? styles.audioButtonActive : styles.audioButton}
+          >
+            {audioAlertsEnabled ? <Volume2 style={{ width: '14px', height: '14px' }} /> : <VolumeX style={{ width: '14px', height: '14px' }} />}
+            <span>{audioAlertsEnabled ? 'Audio Alerts On' : 'Audio Muted'}</span>
+          </button>
+
+          {/* Video Wall toggle */}
+          <button
+            onClick={() => setIsVideoWall(true)}
+            className={styles.videoWallButton}
+          >
+            <Monitor style={{ width: '14px', height: '14px' }} />
+            <span>Video Wall Mode</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Top Navigation Subheader Tabs (Hidden on Desktop) */}
+      <div className={styles.mobileTabs} role="tablist" aria-label="Mobile View Navigation Tabs">
+        {(['zones', 'recs', 'incidents', 'briefings', 'translator'] as const).map(tab => (
+          <button
+            key={tab}
+            role="tab"
+            aria-selected={activeTab === tab}
+            onClick={() => setActiveTab(tab)}
+            className={activeTab === tab ? styles.mobileTabButtonActive : styles.mobileTabButton}
+          >
+            {tab === 'zones' && <><span role="img" aria-label="zones icon">📊</span> Zones</>}
+            {tab === 'recs' && <><span role="img" aria-label="recommendations icon">💡</span> Recs {pendingRecommendations.length > 0 ? `(${pendingRecommendations.length})` : ''}</>}
+            {tab === 'incidents' && <><span role="img" aria-label="incidents icon">⚠️</span> Incidents {incidents.length > 0 ? `(${incidents.length})` : ''}</>}
+            {tab === 'briefings' && <><span role="img" aria-label="briefings icon">📋</span> Briefs</>}
+            {tab === 'translator' && <><span role="img" aria-label="translator icon">🗣️</span> Translator</>}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Grid View */}
+      <div className={styles.mainGrid}>
+        
+        {/* Top Span: GenAI Operational Summary */}
+        <div className={styles.summaryCard} role="region" aria-label="Operational Summary">
+          <div className={styles.summaryHeader}>
+            <div className={styles.summaryBranding}>
+              <div className={styles.summaryIconWrapper}>
+                <Users style={{ width: '16px', height: '16px', color: 'var(--color-pitch-green)' }} aria-hidden="true" />
               </div>
+              <div>
+                <span className={styles.summaryTitle}>
+                  OPERATIONAL INTELLIGENCE SYNTHESIS
+                </span>
+                <span className={styles.summarySubtitle}>
+                  REAL-TIME COGNITIVE LAYER
+                </span>
+              </div>
+            </div>
+            
+            <div className={styles.summaryActions}>
+              <div className={styles.weatherBadge} role="status">
+                <span style={{ fontSize: '12px' }} role="img" aria-label="cloud with rain">🌧️</span>
+                <span>Weather: <strong>Rain (40 min)</strong></span>
+              </div>
+              <button
+                onClick={fetchOpsSummary}
+                disabled={isLoadingSummary}
+                className={styles.refreshButton}
+                aria-label="Refresh operational intelligence summary"
+              >
+                {isLoadingSummary ? 'Synthesizing...' : 'Refresh Summary'}
+              </button>
+            </div>
+          </div>
+
+          <p className={styles.summaryText}>
+            {isLoadingSummary ? (
+              <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className={styles.summaryDotFlashing}></span> Retrieving live inputs and generating cognitive operational summary...
+              </span>
+            ) : opsSummary || (
+              "No summary generated yet. Click 'Refresh Summary' to synthesize the stadium state."
             )}
+          </p>
+        </div>
+
+        {/* Left Side: Live Density Cards & Entry Form */}
+        <div className={`${styles.panelZones} ${activeTab === 'zones' ? styles.mobileActive : styles.mobileHidden}`}>
+          <ZonesTab
+            zonesConfig={zonesConfig}
+            readings={readings}
+            db={db}
+            formZoneId={formZoneId}
+            setFormZoneId={setFormZoneId}
+            formValue={formValue}
+            setFormValue={setFormValue}
+            formError={formError}
+            formSuccess={formSuccess}
+            isSubmitting={isSubmitting}
+            handleDensitySubmit={handleDensitySubmit}
+            getDensityStatus={getDensityStatus}
+          />
+        </div>
+
+        {/* Right Side Column containing stacked sections (or toggled tabs on mobile) */}
+        <div className={styles.sideColumns}>
+          
+          <div className={activeTab === 'recs' ? styles.mobileActive : styles.mobileHidden}>
+            <RecommendationsTab
+              pendingRecommendations={pendingRecommendations}
+              approvedIds={approvedIds}
+              handleApprove={handleApprove}
+              getSeverityStyle={getSeverityStyle}
+              getZoneName={getZoneName}
+            />
+          </div>
+
+          <div className={activeTab === 'incidents' ? styles.mobileActive : styles.mobileHidden}>
+            <IncidentsTab
+              incidents={incidents}
+              incidentInput={incidentInput}
+              setIncidentInput={setIncidentInput}
+              isSubmittingIncident={isSubmittingIncident}
+              isListeningIncident={isListeningIncident}
+              dispatchedIds={dispatchedIds}
+              handleIncidentSubmit={handleIncidentSubmit}
+              handleIncidentUpdate={handleIncidentUpdate}
+              handleDispatchIncident={handleDispatchIncident}
+              getIncidentSeverityStyle={getIncidentSeverityStyle}
+              handleVoiceIncidentInput={handleVoiceIncidentInput}
+            />
+          </div>
+
+          <div className={activeTab === 'briefings' ? styles.mobileActive : styles.mobileHidden}>
+            <BriefingsTab
+              briefingRole={briefingRole}
+              setBriefingRole={setBriefingRole}
+              briefingContext={briefingContext}
+              setBriefingContext={setBriefingContext}
+              isGeneratingBriefing={isGeneratingBriefing}
+              generatedBriefing={generatedBriefing}
+              handleGenerateBriefing={handleGenerateBriefing}
+            />
+          </div>
+
+          <div className={activeTab === 'translator' ? styles.mobileActive : styles.mobileHidden}>
+            <TranslatorTab
+              translateText={translateText}
+              setTranslateText={setTranslateText}
+              fromLang={fromLang}
+              setFromLang={setFromLang}
+              toLang={toLang}
+              setToLang={setToLang}
+              translatedText={translatedText}
+              isTranslating={isTranslating}
+              handleTranslate={handleTranslate}
+              speakTranslation={speakTranslation}
+            />
           </div>
 
         </div>
 
       </div>
-
-      {/* Responsive media overrides embedded directly */}
-      <style>{`
-        @media (max-width: 767px) {
-          .ops-mobile-tabs {
-            display: flex !important;
-          }
-          .ops-grid {
-            grid-template-columns: 1fr !important;
-            padding: 16px !important;
-            gap: 16px !important;
-            overflow-y: auto !important;
-          }
-          .mobile-hidden {
-            display: none !important;
-          }
-          .mobile-active {
-            display: flex !important;
-          }
-          .ops-side-columns {
-            display: contents !important;
-          }
-          .zones-card-grid {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import logging
 import time
-import requests
+import httpx
 import json
 from typing import Dict, Any
 from app.core.config import Settings
@@ -131,7 +131,11 @@ def generate_recommendation(zone_id: str, current_value: float, settings: Settin
         logger.warning("No valid GEMINI_API_KEY. Using fallback recommendation.")
         return fallback
 
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.gemini_api_key}"
+    api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": settings.gemini_api_key
+    }
     
     SYSTEM_INSTRUCTIONS = """
 You are GroundControl Stadium Operations recommendation planner.
@@ -157,6 +161,7 @@ Instructions:
 1. Formulate a staff-facing recommendation detailing how to reroute crowd flow away from the congested zone towards adjacent or less busy zones. Keep it professional.
 2. Formulate corresponding public alerts in en, es, and fr. The tone should be clear and helpful.
 3. The response must be a JSON object conforming to the schema.
+4. Wherever a time, distance, capacity, or density percentage is knowable from the data supplied (e.g. current occupancy value or capacity limits), you must state it as a number in the recommendation and alert texts, not a vague adjective.
 """
 
     prompt = (
@@ -210,7 +215,7 @@ Instructions:
     }
 
     try:
-        response = requests.post(api_url, json=payload, headers={"Content-Type": "application/json"}, timeout=5.0)
+        response = httpx.post(api_url, json=payload, headers=headers, timeout=5.0)
         
         if response.status_code != 200:
             logger.error(f"Gemini API returned error code {response.status_code}: {response.text}")
@@ -243,3 +248,181 @@ Instructions:
     except Exception as exc:
         logger.error(f"Failed to generate recommendation via Gemini API: {exc}")
         return fallback
+
+
+# Waste / Queue prediction and recommendation logic
+STALL_RECOMMENDATION_COOLDOWN: Dict[str, float] = {}
+FOOD_STALLS = {
+    "f1": {"name": "Northside Burgers", "zone": "z1", "cuisine": "Burgers & Fries"},
+    "f2": {"name": "Taco Corner", "zone": "z2", "cuisine": "Mexican Street Tacos"},
+    "f3": {"name": "Eastside Pizza", "zone": "z3", "cuisine": "Fresh Pizza Slices"},
+    "f4": {"name": "Vegan Goals", "zone": "z4", "cuisine": "Plant-based Wraps"},
+    "f5": {"name": "Metro Pretzel", "zone": "z5", "cuisine": "Pretzels & Churros"},
+    "f6": {"name": "World Cup Cantina", "zone": "z6", "cuisine": "Global Bites & Drinks"}
+}
+
+CANNED_WASTE_RECOMMENDATIONS = {
+    "f1": {
+        "recommendationText": "Sanitation Alert: High volume at Northside Burgers (z1). Deploy 2 extra cleaning crew members and increase bin clearing frequency to every 15 minutes. Dispatch 1 queue manager to coordinate crowds.",
+        "alertText": {
+            "en": "Northside Burgers (Zone 1) is currently busy with a 15-minute queue. Try Vegan Goals in Zone 4 (3-minute queue) for faster service.",
+            "es": "Northside Burgers (Zona 1) está lleno con una fila de 15 minutos. Pruebe Vegan Goals en la Zona 4 (fila de 3 minutos) para un servicio más rápido.",
+            "fr": "Northside Burgers (Zone 1) est actuellement très fréquenté avec une file d'attente de 15 minutes. Essayez Vegan Goals en Zone 4 (3 minutes d'attente) pour un service plus rapide."
+        },
+        "severity": "medium"
+    },
+    "f2": {
+        "recommendationText": "Sanitation Alert: High volume at Taco Corner (z2). Deploy 2 extra cleaning crew members and increase bin clearing frequency to every 15 minutes. Dispatch 1 queue manager to coordinate crowds.",
+        "alertText": {
+            "en": "Taco Corner (Zone 2) is experiencing a 20-minute queue. Try Eastside Pizza in Zone 3 (8-minute queue) to save time.",
+            "es": "Taco Corner (Zona 2) tiene una fila de 20 minutos. Pruebe Eastside Pizza en la Zona 3 (fila de 8 minutos) para ahorrar tiempo.",
+            "fr": "Taco Corner (Zone 2) a une file d'attente de 20 minutes. Essayez Eastside Pizza en Zone 3 (8 minutes d'attente) pour gagner du temps."
+        },
+        "severity": "medium"
+    }
+}
+
+def is_stall_in_cooldown(stall_id: str) -> bool:
+    last_time = STALL_RECOMMENDATION_COOLDOWN.get(stall_id)
+    if last_time is None:
+        return False
+    return (time.time() - last_time) < 120
+
+def set_stall_cooldown(stall_id: str):
+    STALL_RECOMMENDATION_COOLDOWN[stall_id] = time.time()
+
+def generate_waste_recommendation(stall_id: str, sales_count: float, settings: Settings) -> Dict[str, Any]:
+    stall_info = FOOD_STALLS.get(stall_id, {"name": f"Stall {stall_id}", "zone": "z1", "cuisine": "Food"})
+    stall_name = stall_info["name"]
+    zone_id = stall_info["zone"]
+    
+    fallback = CANNED_WASTE_RECOMMENDATIONS.get(stall_id, {
+        "recommendationText": f"Sanitation Alert: High volume at {stall_name} ({zone_id}). Deploy 1 extra cleaning crew member and empty bins every 20 minutes.",
+        "alertText": {
+            "en": f"{stall_name} ({zone_id}) is busy. Consider other nearby stalls to avoid queues.",
+            "es": f"{stall_name} ({zone_id}) está concurrido. Considere otros puestos cercanos para evitar filas.",
+            "fr": f"{stall_name} ({zone_id}) est très fréquenté. Pensez à d'autres stands à proximité pour éviter les files."
+        },
+        "severity": "medium"
+    })
+
+    if settings.demo_mode:
+        logger.info("DEMO_MODE is active. Returning canned waste recommendation.")
+        return fallback
+
+    if not settings.gemini_api_key or settings.gemini_api_key == "dummy":
+        logger.warning("No valid GEMINI_API_KEY. Using fallback waste recommendation.")
+        return fallback
+
+    api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": settings.gemini_api_key
+    }
+    
+    SYSTEM_INSTRUCTIONS_WASTE = """
+You are GroundControl Stadium Sanitation and Crowd Control recommendation planner.
+You monitor transaction volumes at stadium food stalls.
+When a food stall experiences high transaction volume (salesCount >= 50), your task is to draft:
+1. A staff-facing recommendation detailing how to allocate cleaning crew (e.g. bin emptying frequency, sanitation workers) and queue management resources to that stall's zone.
+2. A public-facing alert in English (en), Spanish (es), and French (fr) suggesting alternative nearby food options to distribute the queue.
+
+Food Stall Static Knowledge Base:
+- f1: Northside Burgers (Zone: z1, Cuisine: Burgers & Fries)
+- f2: Taco Corner (Zone: z2, Cuisine: Mexican Street Tacos)
+- f3: Eastside Pizza (Zone: z3, Cuisine: Fresh Pizza Slices)
+- f4: Vegan Goals (Zone: z4, Cuisine: Plant-based Wraps)
+- f5: Metro Pretzel (Zone: z5, Cuisine: Pretzels & Churros)
+- f6: World Cup Cantina (Zone: z6, Cuisine: Global Bites & Drinks)
+
+Instructions:
+1. Formulate a staff-facing recommendation detailing how to increase sanitation bin empty cycles or deploy extra clean-up crews to the stall's zone, and how to manage the queue.
+2. Formulate corresponding public alerts in en, es, and fr recommending alternative stalls in other zones to direct fans away from the long queues.
+3. The response must be a JSON object conforming to the schema.
+4. Wherever a number of crew members, queue duration (minutes), or distance is estimated, you must state it as a number, not a vague adjective (e.g. use '2 sanitation crew' or '15 min queue' instead of 'some crew' or 'long queue').
+"""
+
+    prompt = (
+        f"Generate a sanitation and queue recommendation for food stall '{stall_name}' (ID: {stall_id}) in zone '{zone_id}' "
+        f"which has reached {sales_count} sales transactions.\n"
+    )
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "systemInstruction": {
+            "parts": [
+                {
+                    "text": SYSTEM_INSTRUCTIONS_WASTE
+                }
+            ]
+        },
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": {
+                "type": "OBJECT",
+                "properties": {
+                    "recommendationText": {
+                        "type": "STRING",
+                        "description": "Staff-facing sanitation/queue recommendation suggestion"
+                    },
+                    "alertText": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "en": {"type": "STRING"},
+                            "es": {"type": "STRING"},
+                            "fr": {"type": "STRING"}
+                        },
+                        "required": ["en", "es", "fr"]
+                    },
+                    "severity": {
+                        "type": "STRING",
+                        "enum": ["low", "medium", "high", "critical"],
+                        "description": "Severity of this waste/queue alert"
+                    }
+                },
+                "required": ["recommendationText", "alertText", "severity"]
+            }
+        }
+    }
+
+    try:
+        response = httpx.post(api_url, json=payload, headers=headers, timeout=5.0)
+        
+        if response.status_code != 200:
+            logger.error(f"Gemini Waste API returned error code {response.status_code}: {response.text}")
+            return fallback
+
+        res_data = response.json()
+        raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+        parsed = json.loads(raw_text)
+
+        rec_text = parsed.get("recommendationText")
+        alert_dict = parsed.get("alertText")
+        sev = parsed.get("severity")
+
+        if not rec_text or not alert_dict or not sev:
+            logger.warning("Gemini waste recommendation response missing fields. Using fallback.")
+            return fallback
+
+        if sev not in ["low", "medium", "high", "critical"]:
+            logger.warning(f"Invalid severity level '{sev}' from Gemini. Defaulting to 'medium'.")
+            sev = "medium"
+
+        return {
+            "recommendationText": rec_text,
+            "alertText": alert_dict,
+            "severity": sev
+        }
+
+    except Exception as exc:
+        logger.error(f"Failed to generate waste recommendation via Gemini API: {exc}")
+        return fallback
+

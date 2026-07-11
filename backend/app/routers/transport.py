@@ -1,6 +1,8 @@
 from fastapi import APIRouter, status
 from app.models.transport_schemas import TransportCompareResponse, TransportModeOption
 
+from app.core.weather import MOCK_WEATHER_SIGNAL
+
 router = APIRouter()
 
 STATIC_TRANSPORT_OPTIONS = [
@@ -12,7 +14,13 @@ STATIC_TRANSPORT_OPTIONS = [
 
 @router.get("/transport-compare", response_model=TransportCompareResponse, status_code=status.HTTP_200_OK)
 async def compare_transport() -> TransportCompareResponse:
+    reasoning = None
+    if MOCK_WEATHER_SIGNAL.get("condition") in ["rain", "storm"]:
+        reasoning = "rain incoming — metro beats rideshare pickup queues"
+        
     return TransportCompareResponse(
         illustrative=True,
-        options=STATIC_TRANSPORT_OPTIONS
+        options=STATIC_TRANSPORT_OPTIONS,
+        reasoning=reasoning
     )
+

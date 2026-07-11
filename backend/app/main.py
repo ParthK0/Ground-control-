@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import briefing, chat, density, health, incident, recommendations, transport
+from app.routers import briefing, chat, density, health, incident, recommendations, transport, ops_summary, translate, waste
 from app.services.firebase import initialize_firebase
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,10 @@ def create_app() -> FastAPI:
     app.include_router(incident.router)
     app.include_router(briefing.router)
     app.include_router(transport.router)
+    app.include_router(ops_summary.router)
+    app.include_router(translate.router)
+    app.include_router(waste.router)
+
 
     return app
 

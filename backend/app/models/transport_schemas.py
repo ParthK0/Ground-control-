@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 class TransportModeOption(BaseModel):
     mode: str = Field(..., description="Transport mode name")
@@ -9,3 +9,5 @@ class TransportModeOption(BaseModel):
 class TransportCompareResponse(BaseModel):
     illustrative: bool = Field(True, description="Always true to indicate mock/illustrative data")
     options: List[TransportModeOption] = Field(..., description="Available transport modes options")
+    reasoning: Optional[str] = Field(None, description="Dynamic weather-aware transport recommendation reasoning")
+

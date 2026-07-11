@@ -37,7 +37,10 @@
 | `/recommendations/{id}/approve` | POST | staff | Publish a recommendation as a public alert |
 | `/incident` | POST | staff | Log + classify an incident |
 | `/briefing` | POST | staff | Generate a role-specific volunteer briefing |
-| `/transport-compare` | GET | none | Compare transport modes + emissions estimate |
+| `/ops-summary` | POST | staff | Synthesized plain-language operational summary |
+| `/transport-compare` | GET | none | Compare transport modes + emissions estimate (incorporates Weather signal context) |
+| `/translate` | POST | staff | Bidirectional text translation for volunteers |
+| `/food-stall-volume` | POST | staff | Submit transactions/sales volume of a food stall (triggers sanitation/queue rerouting alerts) |
 
 ## DB schema (Firestore collections)
 - `venues/{venueId}` — name, zones[], gates[]
@@ -61,18 +64,26 @@ treated as a failure and falls back to the cached/default response, never passed
 
 - **Incident classification** — category: one of `medical | security | crowd_control |
   lost_person | facility | weather | other`; severity: one of `low | medium | high |
-  critical`; plus `draftResponse` (string) and `draftComms` (string). Any other category
-  or severity value is rejected server-side and the incident is flagged for manual
-  staff classification instead.
+  critical`; plus `draftResponse` (string) and `draftComms` (string). Any knowable time, 
+  distance, or wait estimate must be stated as a number in the draft fields, not a vague adjective. 
+  Any other category or severity value is rejected server-side and the incident is flagged 
+  for manual staff classification instead.
 - **Recommendation** — `zoneId`, `recommendationText` (string, staff-facing), `alertText`
   (object keyed by language code: `en`, `es`, `fr`), `severity` reused from the same
-  enum above.
-- **Chat response** — plain text for the fan, plus a `topic` tag (`wayfinding |
-  accessibility | transport | general`) used only for logging/analytics, never for
-  access control.
+  enum. Any knowable crowd count, capacity percentage, or estimated time must be stated 
+  as a number in the recommendation and alert texts.
+- **Chat response** — plain text for the fan (with any knowable travel time, distance, or 
+  emissions metric stated as a number), plus a `topic` tag (`wayfinding | accessibility | 
+  transport | general`) used only for logging/analytics, never for access control.
 - **Briefing** — `role` (string), `sections` (array of `{heading, body}`) — kept as
-  structured sections rather than free text so the UI can render consistent cards
-  regardless of what the model generates.
+  structured sections. Any shift duration, wait time, or capacity estimate in the sections' 
+  bodies must be stated as a number.
+- **Ops summary** — `summary` (string): one synthesized plain-language paragraph summarizing 
+  the situation. Any density percentage, incident count, recommendation count, or weather 
+  timeframe must be stated as a number.
+- **Translation** — `translated` (string): the exact translated text in the target language.
+
+
 
 ## Security boundaries
 - Gemini API key: backend env var only, never shipped in the client bundle

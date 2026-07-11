@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends, BackgroundTasks
 from google.cloud import firestore
 
 from app.core.config import get_settings, Settings
+from app.core.auth import require_staff_auth
 from app.models.density_schemas import DensityRequest, DensityResponse
 from app.services.recommendation import (
     check_density_threshold,
@@ -83,7 +84,8 @@ async def create_density_reading(
     request: Request, 
     density_in: DensityRequest,
     background_tasks: BackgroundTasks,
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
+    staff: dict = Depends(require_staff_auth)
 ) -> DensityResponse:
     # 1. Server-side validation of zone ID
     if density_in.zoneId not in ZONE_CAPACITIES:
@@ -159,7 +161,10 @@ async def create_density_reading(
 
 
 @router.get("/density-readings", response_model=List[DensityResponse])
-async def get_latest_density_readings(request: Request) -> List[DensityResponse]:
+async def get_latest_density_readings(
+    request: Request,
+    staff: dict = Depends(require_staff_auth)
+) -> List[DensityResponse]:
     db = request.app.state.firestore
     latest_by_zone = {}
 

@@ -19,6 +19,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       backgroundColor: 'var(--color-base-bg)',
       color: 'var(--color-text-primary)'
     }}>
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+
       {/* Global Navigation Header */}
       <header style={{
         display: 'flex',
@@ -145,6 +149,37 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </Link>
           )}
 
+
+          {currentPath !== '/quality' && (
+            <Link
+              to="/quality"
+              style={{
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'color 0.2s, border-color 0.2s',
+                border: '1px solid var(--color-border)',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: 'var(--color-surface-elevated)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-pitch-green)';
+                e.currentTarget.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+              }}
+            >
+              🏆 Quality
+            </Link>
+          )}
+
           {currentPath === '/ops' && (
             <Link
               to="/fan"
@@ -251,7 +286,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* Main Screen Content */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <main id="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {children}
       </main>
 
@@ -272,6 +307,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Link to="/venues" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Host Venues</Link>
           <span style={{ color: 'var(--color-border)' }}>|</span>
           <Link to="/accessibility" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Accessibility</Link>
+          <span style={{ color: 'var(--color-border)' }}>|</span>
+          <Link to="/quality" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Quality</Link>
           <span style={{ color: 'var(--color-border)' }}>|</span>
           <Link to="/ops" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none', fontWeight: 600 }}>For Organizers</Link>
         </div>
